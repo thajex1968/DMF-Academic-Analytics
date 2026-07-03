@@ -85,13 +85,21 @@ final class ImportJobRepository extends AbstractRepository
 
     /**
      * Cron polling target — docs/02-System-Architecture.md §7:
-     * "Cron->>Job: SELECT next status='queued'".
+     * "Cron->>Job: SELECT next status='queued'". Written as its own SQL
+     * (not delegated to the inherited `findWhere()`, which has no `ORDER
+     * BY`) so the result is deterministically FIFO — DMF\Import\Cron\ImportJobRunner
+     * (T2.7) depends on earlier uploads processing before later ones.
      *
      * @return array<int, array<string, mixed>>
      */
     public function findQueued(): array
     {
-        return $this->findWhere('status', 'queued');
+        $statement = $this->connection->execute(
+            'SELECT * FROM import_jobs WHERE status = ? ORDER BY created_at ASC, id ASC',
+            ['queued'],
+        );
+
+        return $statement->fetchAll();
     }
 
     /**

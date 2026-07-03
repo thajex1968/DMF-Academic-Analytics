@@ -104,13 +104,13 @@ Maps to [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) Phase 1 (Foundation),
 
 # Sprint 2 – Import & Validation
 
-Maps to [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) Phase 2, Tasks T2.1–T2.6. Per
-`IMPLEMENTATION_GUIDE.md` v1.1.0 (see its own Revision History), T2.4 is now "Import Session & Error
-Reporting" — the task the entry below was originally reviewed under before the frozen doc was
-amended to match it; Normalization (FR-009) moved to T2.5, built and awaiting review below.
-Duplicate Detection + Audit Trail (FR-007/FR-008) moved to T2.6, also built and awaiting review
-below. Only T2.7 (cron runner + commit transaction) remains unbuilt, still in the Backlog under its
-new numbering.
+Maps to [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) Phase 2, Tasks T2.1–T2.7 — every task in
+this phase is now built. Per `IMPLEMENTATION_GUIDE.md` v1.1.0 (see its own Revision History), T2.4
+is now "Import Session & Error Reporting" — the task the entry below was originally reviewed under
+before the frozen doc was amended to match it; Normalization (FR-009) moved to T2.5, built and
+awaiting review below. Duplicate Detection + Audit Trail (FR-007/FR-008) moved to T2.6, now built
+and Approved below. T2.7 (cron runner + commit transaction) is also now built and awaiting review
+below.
 
 ## Todo
 
@@ -174,8 +174,69 @@ new numbering.
         --standard=.phpcs.xml` — 0 violations across 99 files. `composer dump-autoload` refreshed
         cleanly (same pre-existing, unrelated PSR-4 casing note as T2.3's fixtures directory —
         `tests/fixtures/normalization/NormalizationFixtures.php` is still classmap-loadable).
-- [ ] Duplicate Detection + Audit Trail — T2.6 (FR-007/FR-008 —
-      [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — given directly by instruction,
+- [ ] Cron Runner + Commit Transaction — T2.7 (FR-006's "no partial commits" rule —
+      [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — the commit-transaction half was
+      already built in T2.3 (`ImportTransactionService`); this task's remaining scope was the
+      cron-polled runner itself.
+      - **Two genuine gaps investigated and confirmed with you before building**
+        ([decisions/IDR-009](decisions/IDR-009-cron-import-runner.md)): (1) nothing resolved which
+        `ImportTemplate` applies to a queued job — `ScoreImportService`'s own docblock explicitly
+        disclaims guessing this, and every existing caller (all tests) hardcodes one; (2) no CLI/cron
+        entry-point convention exists anywhere in the DMF Platform family (`dmf-core`, this project,
+        or `../grade.dmf.ac.th`) — confirmed by reading `grade.dmf.ac.th`'s actual
+        `docs/OPERATIONS.md`/`docs/PRODUCTION.md`, whose cron-invoked PHP is a plain, non-shebang
+        script under `public_html/api/system/`, not a `bin/` directory. Resolved per your direction:
+        an injectable `TemplateResolver` defaulting to the one example template (swappable later
+        without touching any caller), and a plain script matching `grade.dmf.ac.th`'s convention.
+      - **Cron layer** (`app/Import/Cron/`, new): `ImportJobRunner` (polls a bounded batch —
+        `$maxJobsPerRun`, default 10, per PRD §20's 30-second-per-file NFR and the "no long-running
+        workers outside cron" hosting constraint — of queued jobs, oldest first, and runs each
+        through the already-approved `ImportSessionService`; a `Throwable` outside
+        `ScoreImportService`'s own handling — most likely template resolution — is caught per job,
+        the job is marked `failed` with the same safe generic message convention as T2.3/T2.6, and
+        the runner moves on rather than aborting the whole tick), `JobOutcome`/`RunSummary` (plain
+        outcome DTOs — processed/success/failure counts).
+      - **Template layer** (`app/Import/Template/TemplateResolver.php`, new): `resolveForAssessment(int
+        $assessmentId): ImportTemplate` — v1.0 always returns the one configured default template;
+        accepts `$assessmentId` now so a future real per-academic-year lookup only changes this
+        method's body, not any caller.
+      - **Database layer** (`app/Database/ConnectionFactory.php`, new): completes
+        [decisions/IDR-005](decisions/IDR-005-database-connection-strategy.md) — designed in Module 1
+        planning but never built until this task actually needed a real `Connection` outside a test
+        double. `TransactionManager` (IDR-005's other half) remains deliberately deferred — this
+        pipeline is still one top-level transaction per commit, so the nesting-guard it would provide
+        still has no real trigger.
+      - **Repository fix**: `ImportJobRepository::findQueued()` previously delegated to the inherited,
+        unordered `findWhere()` — rewritten as its own SQL with `ORDER BY created_at ASC, id ASC` so
+        the runner's FIFO processing is deterministic, not incidental.
+      - **Entry point** (`public_html/api/cron/import_runner.php`, new — the first file under
+        `public_html/` this project has ever created): a plain, non-shebang procedural script, wired
+        exactly like the test suite (real repositories/services over a real `ConnectionFactory`
+        connection), refuses to run under any SAPI but `cli` (a web-reachable-by-path script must
+        never be triggerable by an anonymous HTTP request), paired with a `.htaccess`
+        (`Require all denied`) in the same directory as defense in depth, not a substitute for that
+        guard. Verified with `php -l` (syntax only — not run against a live database in this pass; no
+        change to this environment's database availability since T1.3).
+      - **Known limitation surfaced, not part of this task's own diff, reported rather than
+        silently fixed**: a from-scratch `vendor/bin/phpcs` run found 105 pre-existing files (T1.5
+        through T2.6, plus 2 files this task itself touched — `ImportJobRepository.php` and
+        `ImportJobRunnerTest.php`) with CRLF line endings where the ruleset expects LF — root-caused
+        to this machine's `git config core.autocrlf=true` with no `.gitattributes` to override it, not
+        a defect in any of those files' actual content. Confirmed with you: left as-is, to be fixed in
+        its own dedicated pass (`.gitattributes` + `phpcbf`), not bundled into this task's diff.
+      - **Verified for real**: `vendor/bin/phpunit` — **236/236 tests, 643 assertions**, all passing
+        (10 new: 3 `ConnectionFactoryTest`, 2 `TemplateResolverTest`, 5 `ImportJobRunnerTest` covering
+        empty-queue, multi-job processing, FIFO ordering, the `$maxJobsPerRun` bound, and per-job
+        failure isolation). `vendor/bin/phpstan analyse` — `[OK] No errors` at level 8.
+        `vendor/bin/phpcs --standard=.phpcs.xml` — **0 errors, 0 warnings among files this task
+        touched**; 105 pre-existing CRLF errors remain repo-wide, see the Known Limitation above (not
+        claimed as clean — reported exactly as found). `php -l
+        public_html/api/cron/import_runner.php` — no syntax errors. `composer dump-autoload` — clean
+        (same two pre-existing PSR-4 casing notes as T2.3/T2.5's fixture classes).
+
+## Done
+- [x] Duplicate Detection + Audit Trail — T2.6 (FR-007/FR-008 —
+      [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — **Approved.** Given directly by instruction,
       scoped to Duplicate Detection + Audit Trail only: no cron runner (T2.7), no analytics, no
       dashboard, no AI.
       - **Analytics/Audit layer** (`app/Import/Audit/`, all new): `DuplicateDetectionService`
@@ -253,9 +314,8 @@ new numbering.
         new `ScoreImportServiceTest` duplicate-path cases, 1 new `RetryFailedImportTest`
         retry-after-duplicate case, 2 new `ImportJobRepositoryTest` cases for the new finder).
         `vendor/bin/phpstan analyse` — `[OK] No errors` at level 8. `vendor/bin/phpcs
-        --standard=.phpcs.xml` — 0 errors, 0 warnings across 107 files.
-
-## Done
+        --standard=.phpcs.xml` — 0 errors, 0 warnings across 107 files. Quality gates passed,
+        documentation reconciled, no outstanding architecture issues remain, review complete.
 - [x] Import Engine Foundation — T2.1 (Upload Service, Import Job Manager, File Validation, Excel
       Reader, CSV Reader — [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) —
       **Approved.** **Scoped down per instruction**: no PDF reader (T2.1 also lists `PdfParser`; not requested this pass),
