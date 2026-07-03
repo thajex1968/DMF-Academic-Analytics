@@ -109,7 +109,7 @@ final class ImportJobRepositoryTest extends TestCase
         self::assertNull($repository->findBySchoolAssessmentAndPath(1, 1, 'storage/imports/x.csv'));
     }
 
-    public function testFindQueuedDelegatesToFindWhere(): void
+    public function testFindQueuedReturnsQueuedJobsOrderedOldestFirst(): void
     {
         $statement = $this->createMock(PDOStatement::class);
         $statement->method('fetchAll')->willReturn([['id' => 9, 'status' => 'queued']]);
@@ -117,7 +117,13 @@ final class ImportJobRepositoryTest extends TestCase
         $connection = $this->createMock(ConnectionInterface::class);
         $connection->expects(self::once())
             ->method('execute')
-            ->with(self::stringContains('WHERE status = ?'), ['queued'])
+            ->with(
+                self::logicalAnd(
+                    self::stringContains('WHERE status = ?'),
+                    self::stringContains('ORDER BY created_at ASC, id ASC'),
+                ),
+                ['queued'],
+            )
             ->willReturn($statement);
 
         $repository = new ImportJobRepository($connection);

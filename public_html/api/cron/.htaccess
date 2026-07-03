@@ -1,0 +1,4 @@
+# This directory holds cron-only entry points (T2.7) — never intended to be reachable over HTTP.
+# The scripts themselves also refuse to run under any SAPI other than `cli` (defense in depth,
+# not a substitute for this rule) — see import_runner.php's own docblock.
+Require all denied
