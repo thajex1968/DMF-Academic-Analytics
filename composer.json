@@ -11,11 +11,12 @@
     ],
     "require": {
         "php": "^8.3",
+        "ext-hash": "*",
+        "ext-json": "*",
         "ext-pdo": "*",
         "ext-pdo_mysql": "*",
-        "ext-json": "*",
-        "ext-hash": "*",
-        "dmf/core": "@dev"
+        "dmf/core": "@dev",
+        "phpoffice/phpspreadsheet": "^5.8"
     },
     "require-dev": {
         "phpstan/phpstan": "^1.12",

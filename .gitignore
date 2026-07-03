@@ -3,3 +3,13 @@
 /build/
 .phpunit.cache/
 .phpunit.result.cache
+
+# Uploaded import files and generated cache/logs — never committed (may
+# contain student PII, per docs/03-Database-Design.md §15). Directory
+# structure is preserved via .gitkeep; contents are not.
+/storage/imports/*
+!/storage/imports/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep

@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-011 |
-| **Version** | 1.0.0 |
+| **Version** | 1.1.0 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-02 |
+| **Date** | 2026-07-03 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [docs/00-Project-Overview](docs/00-Project-Overview.md) · [docs/01-PRD](docs/01-PRD.md) · [docs/02-System-Architecture](docs/02-System-Architecture.md) · [docs/03-Database-Design](docs/03-Database-Design.md) · [docs/Architecture-Principles](docs/Architecture-Principles.md) · [docs/Naming-Convention](docs/Naming-Convention.md) · [decisions/README](decisions/README.md) |
 
@@ -15,6 +15,8 @@
 
 | Version | Date | Description | Author |
 |---|---|---|---|
+| 1.1.0 | 2026-07-03 | Post-Freeze Amendment to Phase 2's task list, given directly by instruction. **T2.4** was "Normalization — item-to-indicator mapping (FR-009)"; it is now **"Import Session & Error Reporting"** — session orchestration and user-facing error reporting on top of the Score Import Pipeline (`ImportSessionService`, `ImportSummary`, `RowErrorCollector`, `ImportErrorReport`, `RetryFailedImport`, `DownloadErrorCsv`, `ImportHistory`), matching what was actually built and put up for review under that task ID. The displaced Normalization task moves to **T2.5**, with its scope now stated explicitly (`ItemIndicatorNormalizer`, `StandardMappingService`, `QuestionStandardResolver`, `NormalizationResult`) rather than left as a one-line pointer to [docs/Business-Flow.md §4](docs/Business-Flow.md#4-normalization). The two tasks previously at T2.5 (duplicate detection, FR-007 + import log/audit trail, FR-008) and T2.6 (cron-polled job runner + commit transaction) cascade down to **T2.6** and **T2.7** respectively — unchanged in content, renumbered only. No task's linked FR changed; only task IDs and T2.4/T2.5's descriptions did. | DMF Platform Team |
+| 1.0.1 | 2026-07-03 | Corrected T1.4's `assessment_types` seed description, which said "exactly one active row (ONET) and the ten reserved codes" — contradicting `docs/01-PRD.md` §6/§25 and `docs/03-Database-Design.md` §4, both of which are explicit that only the one `ONET` row is seeded in v1.0; the ten reserved codes are not inserted until each is activated via the Approval Flow. Found and fixed during T1.4 (Seeder) implementation. No scope change — only the stale description. | DMF Platform Team |
 | 1.0.0 | 2026-07-02 | Initial release, added as a Post-Freeze Amendment to the DLAP Documentation Baseline v2.0.0 (see [docs/00-Project-Overview.md §13](docs/00-Project-Overview.md#13-documentation-freeze)). Practical build guide: Roadmap → Task → Implementation Order → Dependencies → Coding Rules → Definition of Done → QA Checklist. | DMF Platform Team |
 
 ## Purpose
@@ -76,8 +78,9 @@ ticket should be created at — not finer (a ticket per method) and not coarser 
 * **T1.3** Create the `dmf_academic` schema — every table in [docs/03-Database-Design.md
   §3–§10](docs/03-Database-Design.md#3-table-definitions--organizational), in the dependency order
   given in [§3 Implementation Order](#3-implementation-order) below.
-* **T1.4** Seed `assessment_types` with exactly one active row (`ONET`) and the ten reserved codes
-  — [docs/03-Database-Design.md §4](docs/03-Database-Design.md#4-table-definitions--assessment-framework).
+* **T1.4** Seed `assessment_types` with exactly one active row (`ONET`) — the ten reserved codes
+  are **not** seeded in v1.0, per [docs/01-PRD.md §6](docs/01-PRD.md#6-scope)/[§25](docs/01-PRD.md#25-lifecycle--governance)
+  and [docs/03-Database-Design.md §4](docs/03-Database-Design.md#4-table-definitions--assessment-framework).
   **Do not** build import/validation logic for the reserved codes — that is out of v1.0 scope
   ([docs/01-PRD.md §7](docs/01-PRD.md#7-out-of-scope)).
 * **T1.5** Implement the **Student & Enrollment module** (`DMF\Student\*`): `students`,
@@ -97,11 +100,19 @@ ticket should be created at — not finer (a ticket per method) and not coarser 
   ([docs/02-System-Architecture.md §7](docs/02-System-Architecture.md#7-import-pipeline-architecture)).
 * **T2.3** Implement structural/content Validation (FR-006) using `dmf-core`'s
   `Validation\Validator`, plus DLAP-specific rules (score range, item-number bounds).
-* **T2.4** Implement Normalization — item-to-indicator mapping (FR-009) — see
+* **T2.4** Implement Import Session & Error Reporting — session orchestration on top of the Score
+  Import Pipeline (T2.3) plus user-facing, traceable error reporting that never exposes an internal
+  exception message: `ImportSessionService`, `ImportSummary`, `RowErrorCollector`,
+  `ImportErrorReport`, `RetryFailedImport`, `DownloadErrorCsv`, `ImportHistory`. Reuses
+  `ImportJobManager` and `ImportResult` unchanged — no new pipeline logic.
+* **T2.5** Implement Normalization — item-to-indicator mapping (FR-009) — see
   [docs/Business-Flow.md §4](docs/Business-Flow.md#4-normalization) for the business framing of
-  this step.
-* **T2.5** Implement duplicate detection (FR-007) and the import log / audit trail (FR-008).
-* **T2.6** Implement the cron-polled job runner and the commit transaction (Storage, FR-006's
+  this step. Converts question/item-level response data into the learning indicators and standards
+  Analytics (Phase 3) consumes, rather than Analytics reading raw item responses directly:
+  `ItemIndicatorNormalizer`, `StandardMappingService`, `QuestionStandardResolver`,
+  `NormalizationResult`.
+* **T2.6** Implement duplicate detection (FR-007) and the import log / audit trail (FR-008).
+* **T2.7** Implement the cron-polled job runner and the commit transaction (Storage, FR-006's
   "no partial commits" rule) — [docs/03-Database-Design.md
   §13](docs/03-Database-Design.md#13-data-integrity-rules).
 

@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-006 |
-| **Version** | 1.0.1 |
+| **Version** | 1.0.2 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-02 |
+| **Date** | 2026-07-03 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [01-PRD](01-PRD.md) · [03-Database-Design](03-Database-Design.md) · [Naming-Convention](Naming-Convention.md) |
 
@@ -17,6 +17,7 @@
 |---|---|---|---|
 | 1.0.0 | 2026-07-02 | Initial release. Field-level business meaning and validation rules for every table in `dmf_academic` v2.0.0. | DMF Platform Team |
 | 1.0.1 | 2026-07-02 | QA fix (see [Documentation-QA-Report.md](Documentation-QA-Report.md)): corrected the `assessment_types.code` row's "eleven reserved codes" to "eleven codes total, ten reserved." Frozen as part of the DLAP Documentation Baseline v2.0.0 ([00-Project-Overview.md §13](00-Project-Overview.md#13-documentation-freeze)). | DMF Platform Team |
+| 1.0.2 | 2026-07-03 | Post-Freeze Amendment (T2.6, FR-007/FR-008): `import_logs.event`'s Validation cell extended from 6 to 10 values, adding `duplicate_found`, `import_started`, `retry`, `rollback`. See [decisions/IDR-008](../decisions/IDR-008-import-audit-event-vocabulary-extension.md). | DMF Platform Team |
 
 ## Purpose and Relationship to 03-Database-Design.md
 
@@ -157,7 +158,7 @@ tables: validation rules that are business logic, not schema constraints.
 ### `import_logs`
 | Field | Description | Validation |
 |---|---|---|
-| event | Which pipeline stage produced this log entry. | One of `queued`, `parsed`, `validated`, `mapped`, `committed`, `rejected` — append-only; existing rows are never updated or deleted, since this table is the audit trail PRD FR-008 requires. |
+| event | Which pipeline stage produced this log entry. | One of `queued`, `parsed`, `validated`, `mapped`, `committed`, `rejected`, `duplicate_found`, `import_started`, `retry`, `rollback` — append-only; existing rows are never updated or deleted, since this table is the audit trail PRD FR-008 requires. `duplicate_found`/`import_started`/`retry`/`rollback` were added during T2.6 (FR-007/FR-008 implementation) — see [decisions/IDR-008](../decisions/IDR-008-import-audit-event-vocabulary-extension.md). |
 | actor_id | Who triggered this event. | `NULL` for system/cron-generated events (e.g., the cron picking up a queued job); populated with a `staff_users.id` only for a human-triggered event (e.g., the original upload). |
 
 ## 6. Scores & Responses
