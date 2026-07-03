@@ -6,7 +6,7 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-000 |
-| **Version** | 2.0.7 |
+| **Version** | 2.0.8 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
 | **Date** | 2026-07-03 |
 | **Author** | DMF Platform Team |
@@ -32,6 +32,7 @@
 | 2.0.5 | 2026-07-02 | Added a fourth Post-Freeze Amendments entry recording root [ARCHITECTURE.md](../ARCHITECTURE.md) (`ONET-DOC-014`) — a concern-based "where do I look" router, distinct from [02-System-Architecture.md](02-System-Architecture.md) (the software design) and from [CLAUDE.md](../CLAUDE.md)'s document-oriented map. | DMF Platform Team |
 | 2.0.6 | 2026-07-02 | Added a fifth Post-Freeze Amendments entry recording root [START_SESSION.md](../START_SESSION.md) (`ONET-DOC-015`) — the fixed procedure every implementation session starts with. Implementation began: Sprint 1, Module 1 (Core Configuration). | DMF Platform Team |
 | 2.0.7 | 2026-07-03 | Added a sixth Post-Freeze Amendments entry, made during Module 2 implementation planning: [02-System-Architecture.md §16](02-System-Architecture.md#16-cross-cutting-concerns) and [Naming-Convention.md §5](Naming-Convention.md#5-configuration--environment-variables) updated — the module-specific environment variable prefix changed from `ONET_` to `DLAP_` after confirming no external system had ever deployed against it. See [decisions/IDR-006](../decisions/IDR-006-dlap-env-prefix.md). | DMF Platform Team |
+| 2.0.8 | 2026-07-03 | Added a seventh Post-Freeze Amendments entry, made during T2.6 (Duplicate Detection + Audit Trail, FR-007/FR-008) implementation: `import_logs.event`'s vocabulary extended from 6 to 10 values. See [decisions/IDR-008](../decisions/IDR-008-import-audit-event-vocabulary-extension.md). | DMF Platform Team |
 
 ## Table of Contents
 

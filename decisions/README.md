@@ -72,6 +72,8 @@ reused; the slug is a short, kebab-case restatement of the decision's title. See
 | [IDR-004](IDR-004-custom-env-loader.md) | Custom, Dependency-Free .env Loader | Task T1.1/T1.2 — first implemented decision, Sprint 1 Module 1 (Core Configuration) |
 | [IDR-005](IDR-005-database-connection-strategy.md) | Database Connection Strategy | [IDR-003](IDR-003-pdo-for-database-layer.md); Task T1.2/Module 2 |
 | [IDR-006](IDR-006-dlap-env-prefix.md) | Module-Specific Environment Variable Prefix: `DLAP_`, Not `ONET_` | Reverses part of `docs/Naming-Convention.md §5`; made during Module 2 planning |
+| [IDR-007](IDR-007-idempotent-sql-seed-files.md) | Idempotent Raw-SQL Seed Files, Mirroring the Migration Pattern | [IDR-003](IDR-003-pdo-for-database-layer.md); Task T1.4 |
+| [IDR-008](IDR-008-import-audit-event-vocabulary-extension.md) | `import_logs.event` Vocabulary Extension for Duplicate Detection + Audit Trail | [IDR-003](IDR-003-pdo-for-database-layer.md); Task T2.6 |
 
 Add a row here in the same pull request that adds the IDR file — this index is the one place a
 reader can see every implementation-level decision made so far without opening each file.

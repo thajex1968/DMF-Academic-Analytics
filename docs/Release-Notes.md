@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-012 |
-| **Version** | 1.0.0 |
+| **Version** | 1.0.1 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-02 |
+| **Date** | 2026-07-03 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [01-PRD](01-PRD.md) · [IMPLEMENTATION_GUIDE](../IMPLEMENTATION_GUIDE.md) · [PROJECT_BOARD](../PROJECT_BOARD.md) |
 
@@ -15,6 +15,7 @@
 
 | Version | Date | Description | Author |
 |---|---|---|---|
+| 1.0.1 | 2026-07-03 | Corrected §1 Unreleased, which still said "Phase 1 has not started" after Sprint 1's Config and Environment tasks (T1.1/T1.2) were completed and verified (6/6 PHPUnit tests passing) — see [PROJECT_BOARD.md](../PROJECT_BOARD.md)'s Done column. No scope or plan content changed, only the stale status statement. | DMF Platform Team |
 | 1.0.0 | 2026-07-02 | Initial release, added as a Post-Freeze Amendment to the DLAP Documentation Baseline v2.0.0 (see [00-Project-Overview.md §13](00-Project-Overview.md#13-documentation-freeze)). Establishes the release-notes format and the planned content of v0.1.0 and v0.2.0. | DMF Platform Team |
 
 ## About This Document
@@ -47,14 +48,16 @@ reserved for the first release that delivers the complete v1.0 functional scope 
 
 ## 1. Unreleased
 
-Nothing is in progress ahead of v0.1.0 as of this document's date — [Phase
-1](../IMPLEMENTATION_GUIDE.md#1-roadmap) has not started. Track current work-in-progress on
-[PROJECT_BOARD.md](../PROJECT_BOARD.md), not here; this document only records what a *finished*
-version contains, once it's finished (or, until then, planned to contain).
+[Phase 1](../IMPLEMENTATION_GUIDE.md#1-roadmap) is in progress, ahead of v0.1.0's release: Tasks
+T1.1/T1.2 (Config, Environment) are complete and verified (6/6 PHPUnit tests passing); T1.3–T1.7
+are not yet started. Track current work-in-progress on [PROJECT_BOARD.md](../PROJECT_BOARD.md), not
+here; this document only records what a *finished* version contains, once it's finished (or, until
+then, planned to contain) — in-progress work does not get its own entry here until v0.1.0 actually
+ships.
 
 ## 2. v0.2.0 — Import & Validation (Planned)
 
-**Maps to:** [IMPLEMENTATION_GUIDE.md](../IMPLEMENTATION_GUIDE.md) Phase 2, Tasks T2.1–T2.6.
+**Maps to:** [IMPLEMENTATION_GUIDE.md](../IMPLEMENTATION_GUIDE.md) Phase 2, Tasks T2.1–T2.7.
 
 **Planned to add:**
 * O-NET PDF/Excel/CSV import (FR-003/FR-004/FR-005), via `PdfParser`/`ExcelParser`/`CsvParser` —

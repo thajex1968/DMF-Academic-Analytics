@@ -6,9 +6,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-003 |
-| **Version** | 2.0.1 |
+| **Version** | 2.0.2 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-02 |
+| **Date** | 2026-07-03 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [01-PRD](01-PRD.md) · [02-System-Architecture](02-System-Architecture.md) · [Architecture-Decision-Record](Architecture-Decision-Record.md) · [Architecture-Principles](Architecture-Principles.md) · [Data-Dictionary](Data-Dictionary.md) |
 
@@ -20,6 +20,7 @@
 | 1.1.0 | 2026-07-02 | Renamed schema from `dmf_onet` to **`dmf_academic`**. Generalized the exam-specific tables into exam-type-agnostic tables (`exam_types`, `exams`, `questions`, `student_scores`, `student_question_responses`, `question_analysis`, `learning_contents`) so future assessments could be added as data, not schema changes. No change to v1.0 functional scope. | DMF Platform Team |
 | 2.0.0 | 2026-07-02 | **Re-centered the schema on the student.** Renamed `exam_types`→`assessment_types` and `exams`→`assessments` (every `exam_id`/`exam_type_id` FK renamed to `assessment_id`/`assessment_type_id`) to match the platform-wide DLAP terminology. Added **`student_enrollments`** (§3) to model a student's Grade 1–6 grade/classroom history as first-class data, and **`student_standard_mastery`** (§9) to hold per-student, longitudinal, per-indicator performance across academic years and assessment types. `students.classroom_id` is now documented as a denormalized pointer to the *current* enrollment, with `student_enrollments` as the source of truth. Rationale: [ADR-006](Architecture-Decision-Record.md#adr-006--why-a-generic-student-centric-assessment-schema). **No v1.0 functional scope change** — `student_standard_mastery` is schema-ready but not populated until the phase that ships the per-student report ([01-PRD.md §18](01-PRD.md#18-core-modules)). | DMF Platform Team |
 | 2.0.1 | 2026-07-02 | QA review (see [Documentation-QA-Report.md](Documentation-QA-Report.md)) found no defects in this document. Frozen as part of the DLAP Documentation Baseline v2.0.0 ([00-Project-Overview.md §13](00-Project-Overview.md#13-documentation-freeze)). | DMF Platform Team |
+| 2.0.2 | 2026-07-03 | Post-Freeze Amendment (T2.6, FR-007/FR-008): extended `import_logs.event`'s vocabulary from 6 to 10 values, adding `duplicate_found`, `import_started`, `retry`, `rollback` — the events the new Duplicate Detection + Audit Trail layer (`app/Import/Audit/*`) needs to represent that the pre-existing pipeline-stage events could not. See [decisions/IDR-008](../decisions/IDR-008-import-audit-event-vocabulary-extension.md). | DMF Platform Team |
 
 ## Table of Contents
 
@@ -334,7 +335,7 @@ a student's progress against these same indicator rows across every grade.
 |---|---|---|---|---|---|
 | id | BIGINT UNSIGNED | NO | PK, AUTO_INCREMENT | — | |
 | import_job_id | BIGINT UNSIGNED | NO | FK → import_jobs.id | — | |
-| event | VARCHAR(50) | NO | | — | `queued`, `parsed`, `validated`, `mapped`, `committed`, `rejected`. |
+| event | VARCHAR(50) | NO | | — | `queued`, `parsed`, `validated`, `mapped`, `committed`, `rejected`, `duplicate_found`, `import_started`, `retry`, `rollback`. |
 | message | TEXT | YES | | NULL | |
 | actor_id | INT UNSIGNED | YES | FK → staff_users.id | NULL | NULL for system/cron-generated events. |
 | created_at | DATETIME | NO | | CURRENT_TIMESTAMP | |
