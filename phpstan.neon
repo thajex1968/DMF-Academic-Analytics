@@ -1,0 +1,6 @@
+parameters:
+    level: 8
+    paths:
+        - app
+    phpVersion: 80300
+    reportUnmatchedIgnoredErrors: false

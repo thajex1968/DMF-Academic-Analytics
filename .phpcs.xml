@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<ruleset name="DLAP">
+    <description>PSR-12 with project-specific tweaks for the DMF Learning Analytics Platform</description>
+
+    <file>app</file>
+    <file>tests</file>
+
+    <arg name="basepath" value="."/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+    <arg name="extensions" value="php"/>
+
+    <!-- PSR-12 base standard -->
+    <rule ref="PSR12"/>
+
+    <!-- Allow long lines in doc blocks and string concatenations -->
+    <rule ref="Generic.Files.LineLength">
+        <properties>
+            <property name="lineLimit" value="120"/>
+            <property name="absoluteLineLimit" value="0"/>
+        </properties>
+    </rule>
+
+    <!-- Exclude generated or vendor files -->
+    <exclude-pattern>vendor/*</exclude-pattern>
+    <exclude-pattern>storage/*</exclude-pattern>
+    <exclude-pattern>build/*</exclude-pattern>
+</ruleset>

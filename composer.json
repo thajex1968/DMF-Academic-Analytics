@@ -1,0 +1,45 @@
+{
+    "name": "dmf/onet",
+    "description": "DMF Learning Analytics Platform (DLAP) — student-centric, longitudinal learning analytics for O-NET and future assessment types",
+    "type": "project",
+    "license": "proprietary",
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../dmf-core"
+        }
+    ],
+    "require": {
+        "php": "^8.3",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "ext-json": "*",
+        "ext-hash": "*",
+        "dmf/core": "@dev"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^1.12",
+        "phpunit/phpunit": "^11.0",
+        "squizlabs/php_codesniffer": "^3.11"
+    },
+    "autoload": {
+        "psr-4": {
+            "DMF\\": "app/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "DMF\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test":     "phpunit",
+        "lint":     "phpcs --standard=.phpcs.xml",
+        "lint-fix": "phpcbf --standard=.phpcs.xml",
+        "analyse":  "phpstan analyse --configuration=phpstan.neon --no-progress"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
