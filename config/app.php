@@ -17,24 +17,23 @@ declare(strict_types=1);
  */
 return [
     'name'     => getenv('APP_NAME') ?: 'DMF Learning Analytics Platform',
-    'version'  => getenv('APP_VERSION') ?: readVersionFile(),
+    'version'  => getenv('APP_VERSION') ?: (static function (): string {
+        // Read the project-root VERSION file, falling back to '0.0.0' if it is
+        // missing — a missing VERSION file should never be a fatal bootstrap
+        // error. An inline closure, not a named global function: this file is
+        // `require`d by bootstrap/app.php (and now by public_html/api/index.php
+        // per request) — a named function here would fatal with "Cannot
+        // redeclare" if this config file is ever required twice in one process.
+        $path = dirname(__DIR__) . '/VERSION';
+        if (!is_file($path) || !is_readable($path)) {
+            return '0.0.0';
+        }
+
+        $contents = file_get_contents($path);
+        return $contents === false ? '0.0.0' : trim($contents);
+    })(),
     'env'      => getenv('APP_ENV') ?: 'production',
     'debug'    => filter_var(getenv('APP_DEBUG') ?: 'false', FILTER_VALIDATE_BOOL),
     'timezone' => getenv('APP_TIMEZONE') ?: 'Asia/Bangkok',
     'locale'   => getenv('APP_LOCALE') ?: 'th',
 ];
-
-/**
- * Read the project-root VERSION file, falling back to '0.0.0' if it is
- * missing — a missing VERSION file should never be a fatal bootstrap error.
- */
-function readVersionFile(): string
-{
-    $path = dirname(__DIR__) . '/VERSION';
-    if (!is_file($path) || !is_readable($path)) {
-        return '0.0.0';
-    }
-
-    $contents = file_get_contents($path);
-    return $contents === false ? '0.0.0' : trim($contents);
-}

@@ -75,6 +75,7 @@ reused; the slug is a short, kebab-case restatement of the decision's title. See
 | [IDR-007](IDR-007-idempotent-sql-seed-files.md) | Idempotent Raw-SQL Seed Files, Mirroring the Migration Pattern | [IDR-003](IDR-003-pdo-for-database-layer.md); Task T1.4 |
 | [IDR-008](IDR-008-import-audit-event-vocabulary-extension.md) | `import_logs.event` Vocabulary Extension for Duplicate Detection + Audit Trail | [IDR-003](IDR-003-pdo-for-database-layer.md); Task T2.6 |
 | [IDR-009](IDR-009-cron-import-runner.md) | Cron Import Runner: Template Resolution, Entry-Point Convention, Batch Size | [IDR-005](IDR-005-database-connection-strategy.md); Task T2.7 |
+| [IDR-010](IDR-010-web-application-foundation.md) | Web Application Foundation: SPA Architecture, Auth Design, Scope Mapping | [IDR-005](IDR-005-database-connection-strategy.md), [IDR-009](IDR-009-cron-import-runner.md); Tasks T1.6/T1.7 |
 
 Add a row here in the same pull request that adds the IDR file — this index is the one place a
 reader can see every implementation-level decision made so far without opening each file.

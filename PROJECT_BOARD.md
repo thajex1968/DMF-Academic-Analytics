@@ -105,20 +105,23 @@ Maps to [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) Phase 1 (Foundation),
 # Sprint 2 – Import & Validation
 
 Maps to [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) Phase 2, Tasks T2.1–T2.7 — every task in
-this phase is now built. Per `IMPLEMENTATION_GUIDE.md` v1.1.0 (see its own Revision History), T2.4
-is now "Import Session & Error Reporting" — the task the entry below was originally reviewed under
-before the frozen doc was amended to match it; Normalization (FR-009) moved to T2.5, built and
-awaiting review below. Duplicate Detection + Audit Trail (FR-007/FR-008) moved to T2.6, now built
-and Approved below. T2.7 (cron runner + commit transaction) is also now built and awaiting review
-below.
+this phase is now built and Approved (T2.5–T2.7 approved via GitHub PR review — PR #2
+`feature/persistence-layer` for T2.5/T2.6, PR #3 `feature/cron-runner` for T2.7 — reconciled here
+to match). Per `IMPLEMENTATION_GUIDE.md` v1.1.0 (see its own Revision History), T2.4 is now "Import
+Session & Error Reporting" — the task the entry below was originally reviewed under before the
+frozen doc was amended to match it; Normalization (FR-009) moved to T2.5. Duplicate Detection +
+Audit Trail (FR-007/FR-008) moved to T2.6. Sprint 2 is complete.
 
 ## Todo
 
 ## In Progress
 
 ## Review
-- [ ] Normalization — T2.5 (Item-to-Indicator Normalization, FR-009 —
-      [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — given directly by instruction.
+
+## Done
+- [x] Normalization — T2.5 (Item-to-Indicator Normalization, FR-009 —
+      [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — **Approved** (merged via PR #2,
+      `feature/persistence-layer`, commit `0d35286`). Given directly by instruction.
       `ItemIndicatorNormalizer`, `StandardMappingService`, `QuestionStandardResolver`,
       `NormalizationResult`. Pure in-memory translation step
       ([docs/Business-Flow.md §4](docs/Business-Flow.md#4-normalization)): takes already-imported
@@ -174,8 +177,9 @@ below.
         --standard=.phpcs.xml` — 0 violations across 99 files. `composer dump-autoload` refreshed
         cleanly (same pre-existing, unrelated PSR-4 casing note as T2.3's fixtures directory —
         `tests/fixtures/normalization/NormalizationFixtures.php` is still classmap-loadable).
-- [ ] Cron Runner + Commit Transaction — T2.7 (FR-006's "no partial commits" rule —
-      [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — the commit-transaction half was
+- [x] Cron Runner + Commit Transaction — T2.7 (FR-006's "no partial commits" rule —
+      [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — **Approved** (merged via PR #3,
+      `feature/cron-runner`, commit `e4da523`, merge `080789e`). The commit-transaction half was
       already built in T2.3 (`ImportTransactionService`); this task's remaining scope was the
       cron-polled runner itself.
       - **Two genuine gaps investigated and confirmed with you before building**
@@ -466,15 +470,123 @@ below.
 
 ---
 
+# Sprint 3 – Web Application Foundation
+
+Maps to [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) Phase 1, Tasks T1.6–T1.7 (Auth,
+role-scoped dashboard shell — deliberately deferred out of Sprint 1, see that sprint's Done entry).
+**Architecture note, resolved before any code was written**: the kickoff instruction described a
+session/CSRF/multi-page server-rendered app; that conflicts with the frozen
+[docs/02-System-Architecture.md](docs/02-System-Architecture.md) (SPA + JSON API + Bearer token, no
+PHP session, matching `grade.dmf.ac.th`) and with `dmf-core`'s `Http\Response` (JSON-only, cannot
+render HTML). Confirmed with you before building — the documented SPA architecture was chosen, no
+ADR needed. Full reasoning, the requested-class-name → `dmf-core`-class mapping, and every concrete
+design choice this forced: [decisions/IDR-010](decisions/IDR-010-web-application-foundation.md).
+
+## Todo
+
+## In Progress
+
+## Review
+- [ ] Web Application Foundation — T1.6/T1.7 (Staff Authentication (FR-001) + Role-Scoped Dashboard
+      Shell (FR-002) — [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — given directly by
+      instruction, re-scoped to the SPA architecture per [decisions/IDR-010](decisions/IDR-010-web-application-foundation.md).
+      No analytics yet — dashboard shell only.
+      - **Auth layer** (`app/Auth/`, new — mirrors `grade.dmf.ac.th`'s actual `app/Auth/*` layout,
+        not the illustrative `app/Action/*` tree in `02-System-Architecture.md §5`, which no module
+        built so far has actually followed): `StaffTokenManager extends Dmf\Core\Auth\TokenManager`
+        (`authenticate()` against `StaffUserRepository` + the real `Security\PasswordHasher`; runs
+        the bcrypt comparison unconditionally, even for an unknown username, against a fixed dummy
+        hash, so a nonexistent-username request and a wrong-password request take the same server
+        time — a real hardening beyond what any doc explicitly asked for), `StaffRateLimiter extends
+        RateLimiter` (MySQL-backed via the new `LoginRateLimitRepository`, not `$_SESSION`-backed
+        like `grade.dmf.ac.th`'s equivalent — this module has no PHP session at all), `StaffGuard
+        extends Guard` (`throttleKey()` only — `login()`/`user()`/`logout()` are already correct in
+        the abstract base).
+      - **Class-name mapping**: the instruction named `AuthenticationService`/`SessionManager`/
+        `AuthMiddleware`. `AuthenticationService` → `StaffGuard`+`StaffTokenManager` (`dmf-core`'s
+        `Guard`/`TokenManager` pair *is* the authentication service). `SessionManager` → **not
+        built** — there is no server-side session to manage in a Bearer-token SPA; building one
+        would be inventing an unused abstraction. `AuthMiddleware` → `DMF\Http\Middleware\StaffAuthMiddleware
+        extends Dmf\Core\Http\Middleware\AuthMiddleware` (maps directly).
+      - **Data layer** (`app/Repository/`, three new, all pure CRUD): `StaffUserRepository`
+        (`findByUsername()`; `delete()` soft-deletes via `deleted_at`, matching
+        `docs/03-Database-Design.md §3`'s documented "soft delete on account deactivation" — never
+        a hard `DELETE`), `LoginRateLimitRepository` (`findByUsername()`), `SchoolRepository`
+        (minimal — only the inherited `findById()` is needed, to resolve a login's `school_id`
+        claim to a display name).
+      - **Action layer** (`app/Action/Auth/`, `app/Action/Dashboard/`, new — *this* tree does match
+        `02-System-Architecture.md §5`, since one-class-per-route HTTP handlers are exactly what it
+        names; the two namespace conventions aren't actually in conflict, see IDR-010 §7):
+        `LoginStaffAction` (thin — all business logic in `Guard::login()`; an empty/wrong
+        username-password, a locked account, an inactive account, and a soft-deleted account all
+        surface as the same `AuthException`, which `Router::dispatch()` already converts to the
+        correctly-coded JSON error), `LogoutStaffAction` (best-effort — `TokenManager::revoke()` is
+        a documented no-op for this stateless token; the real logout is the client discarding its
+        token), `DashboardSummaryAction` (App Version, Logged-in User, School Name, Import
+        Statistics, Recent Import Jobs, System Status — every field genuinely computed, no
+        fabricated metrics; "System Status" is deliberately minimal — PHP version, timezone, a
+        database-reachable flag — since no monitoring infrastructure exists yet).
+      - **No `Gate`/`Policy` layer built** — `StaffAuthMiddleware`'s constructor already accepts an
+        optional `$requiredRole` ("future-ready for additional roles" without a new class per role);
+        building a parallel authorization layer for a check this simple would be speculative
+        (YAGNI) — see IDR-010 §6 for the full reasoning.
+      - **Front controller + SPA shell** (`public_html/`, both new — the SPA shell is the first
+        `public_html/index.html` this project has ever created; `api/index.php` is the second
+        `public_html/*.php` file, after T2.7's cron entry point): `public_html/api/index.php` wires
+        every class above and dispatches via `dmf-core`'s `Http\Router` on `login_staff`/
+        `logout_staff`/`dashboard_summary`. `public_html/index.html` (Bootstrap 5 via CDN, vanilla
+        JS, no build step) + `public_html/assets/js/app.js`: login form → token in
+        `sessionStorage` (never a cookie — no ambient credential, hence no CSRF, per IDR-010 §1) →
+        dashboard fetch/render → logout clears the token. Every server-provided string is inserted
+        via `textContent` or an explicit `escapeHtml()` helper, never raw `innerHTML` interpolation.
+        Responsive via Bootstrap's grid + an offcanvas sidebar on mobile.
+      - **Security**: CSRF/session-fixation/"password never in session" are all inapplicable by
+        architecture (no PHP session exists to fixate or leak a password into) — documented in
+        IDR-010 rather than built as no-op code. Two real, independently-found issues were fixed
+        while building this task: (1) `config/app.php` had a global `readVersionFile()` function
+        declared inside a file this front controller now `require`s per request — a latent "cannot
+        redeclare function" risk, self-identified during Module 1 (Sprint 1) and never fixed until
+        now; replaced with an inline closure. (2) `dmf-core`'s own `Router::dispatch()` puts a raw
+        `Throwable::getMessage()` (confirmed directly: a DB connection failure leaked
+        `"SQLSTATE[HY000] [2002] ..."` verbatim) straight into a 500 JSON response — not something
+        this project can change inside `dmf-core`, so `public_html/api/index.php` now replaces a
+        500 response's message with a generic one whenever `APP_DEBUG` is off, found and fixed via
+        a real dry-run of the front controller (`php -r ...`, not just unit tests) before calling
+        this task done. Security headers (`X-Frame-Options`, `X-Content-Type-Options`) set both
+        server-side (`index.php`) and via `public_html/.htaccess` (covers the static SPA files
+        those PHP headers never touch).
+      - **Known limitation**: no live end-to-end run against a real database — this environment has
+        no MySQL/MariaDB currently running (same limitation noted since T1.3). The front controller
+        was dry-run via CLI (`php -r ...`) far enough to confirm correct wiring and correct JSON
+        error shapes (401/403/404/500) without a database, and the DB-dependent path
+        (`login_staff`) was confirmed to fail gracefully (a clean JSON 500, not a raw PHP fatal
+        error) when no database is reachable — real credential verification against a live
+        `staff_users` table is covered by `StaffTokenManager`/`StaffGuard`'s unit tests (real
+        `PasswordHasher`, real repositories, mocked `ConnectionInterface`), not by a live run.
+      - **Verified for real**: `composer dump-autoload` — clean (same two pre-existing PSR-4 casing
+        notes as T2.3/T2.5's fixture classes). `vendor/bin/phpunit` — **280/280 tests, 751
+        assertions**, all passing (44 new: 5 `StaffUserRepositoryTest`, 5
+        `LoginRateLimitRepositoryTest`, 3 `SchoolRepositoryTest`, 7 `StaffTokenManagerTest`, 6
+        `StaffRateLimiterTest`, 6 `StaffGuardTest`, 5 `StaffAuthMiddlewareTest`, 3
+        `LoginStaffActionTest`, 2 `LogoutStaffActionTest`, 2 `DashboardSummaryActionTest`).
+        `vendor/bin/phpstan analyse` — `[OK] No errors` at level 8. `vendor/bin/phpcs
+        --standard=.phpcs.xml` — **0 errors, 0 warnings among files this task touched**; the
+        113 pre-existing CRLF errors (T1.5 onward, `core.autocrlf` root cause — see T2.7's Done
+        entry) remain, unrelated to this task and still deferred to its own pass per your standing
+        instruction. `php -l` clean on both new `public_html/*.php` files. Manual dry-run of
+        `public_html/api/index.php` via CLI confirmed correct 401 (`dashboard_summary` with no
+        token), 403 (role-mismatch, via unit test), 404 (unknown action), and 500-sanitized
+        (DB unreachable) responses.
+
+---
+
 ## Backlog (not yet in a sprint)
 
-The rest of [IMPLEMENTATION_GUIDE.md §2](IMPLEMENTATION_GUIDE.md#2-task)'s Phase 1 tasks (T1.6–T1.7:
-Auth, Dashboard shell — plus the "resolve current classroom" service T1.5 also names, deliberately
-not built in this pass, see Sprint 1's Done entry above) and every Phase 2–6 task not yet scoped
-into a sprint (the five real named templates — `ONET-2569`, `ONET-2570`, `NT`, `RT`, `School
-Assessment` — once a real สทศ file specification is available; T2.3's structural/content
-validation against the database; T2.7's cron runner + commit transaction (Score Import); the PDF
-parser T2.1 also lists; all of Phase 3+) move onto a board here once Sprint 2 is done — this file
-only carries the current and next sprint, not the whole roadmap; see
-[docs/00-Project-Overview.md §9](docs/00-Project-Overview.md#9-roadmap) and
-[docs/Release-Notes.md](docs/Release-Notes.md) for the full multi-release plan.
+Every Phase 2–6 task not yet scoped into a sprint (the five real named templates — `ONET-2569`,
+`ONET-2570`, `NT`, `RT`, `School Assessment` — once a real
+สทศ file specification is available; T2.3's structural/content validation against the database; the
+"resolve current classroom" service T1.5 also names; the PDF parser T2.1 also lists; all of Phase
+3+ analytics) moves onto a board here once scoped into a sprint — this file only carries active
+sprints, not the whole roadmap; see [docs/00-Project-Overview.md
+§9](docs/00-Project-Overview.md#9-roadmap) and [docs/Release-Notes.md](docs/Release-Notes.md) for
+the full multi-release plan.

@@ -1,0 +1,9 @@
+# Security headers — docs/02-System-Architecture.md §14 (Clickjacking / Content sniffing).
+# public_html/api/index.php sets these too for its own JSON responses; this covers the
+# static files (index.html, assets/) those PHP headers never touch.
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+
+Options -Indexes
