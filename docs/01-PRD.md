@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-001 |
-| **Version** | 2.0.2 |
+| **Version** | 2.0.3 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-02 |
+| **Date** | 2026-07-04 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [02-System-Architecture](02-System-Architecture.md) · [03-Database-Design](03-Database-Design.md) · [Architecture-Decision-Record](Architecture-Decision-Record.md) · [Architecture-Principles](Architecture-Principles.md) |
 
@@ -20,6 +20,7 @@
 | 2.0.0 | 2026-07-02 | Project renamed to DMF Learning Analytics Platform (DLAP); reframed around the student's Grade 1–6 learning history rather than a single exam, with assessments (O-NET, NT, RT, LAS, Pre/Mid/Post-Test, Classroom/Reading/Writing/Competency Assessment) as events in that history. Scope, Out of Scope, Product Overview, System Context, and Glossary updated accordingly. **No functional requirement (FR-001–FR-020) changed** — v1.0 still delivers O-NET, Grade 6, only. | DMF Platform Team |
 | 2.0.1 | 2026-07-02 | QA fixes (see [Documentation-QA-Report.md](Documentation-QA-Report.md)): added the Student & Enrollment and Notification modules to §18's list to match [02-System-Architecture.md §3](02-System-Architecture.md#3-module-decomposition); extended the Approval Flow (§21) to explicitly cover `assessment_types`. Frozen as part of the DLAP Documentation Baseline v2.0.0 ([00-Project-Overview.md §13](00-Project-Overview.md#13-documentation-freeze)). | DMF Platform Team |
 | 2.0.2 | 2026-07-02 | Post-Freeze Amendment. Appendix Versioning section now links to the new [Release-Notes.md](Release-Notes.md). | DMF Platform Team |
+| 2.0.3 | 2026-07-04 | Post-Freeze Amendment — documentation alignment with approved [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) (no functional requirement, acceptance criterion, or v1.0 scope change). FR-010's "aggregated from committed item-level scores" generalized to name both source-Level recompute paths. FR-012 split by Business Rule: difficulty index (school scope) is Level 1-sufficient and in scope now; discrimination index and distractor frequency are Level 2-required and **Reserved for Future Assessment Sources**. Added Assessment Data Classification (Level 1/2/3), Assessment Adapter Layer, and Canonical Analytics Model to the §27 Glossary. | DMF Platform Team |
 
 ## Approval
 
@@ -386,7 +387,13 @@ Each requirement below is complete and implementable; none are placeholders.
 
 ### FR-010 — Classroom-Level Standard Performance Summary
 * **Description:** For a teacher's classroom, compute percent-correct per `ตัวชี้วัด`, aggregated
-  from committed item-level scores.
+  from whichever assessment data Level is available for that indicator — item-level responses from
+  a Level 2 (Raw Assessment Data) source, or a Level 1 (Official Published Statistics) source's own
+  published figures at whatever grain it publishes them. See RFC-004's Assessment Data
+  Classification ([docs/rfcs/RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md#1-assessment-data-classification))
+  for what "aggregated" means for a given source Level, and
+  [03-Database-Design.md §14](03-Database-Design.md#14-aggregation-recompute-strategy) for the two
+  recompute paths this implies.
 * **Priority:** Critical
 * **Acceptance Criteria:** Summary recomputes automatically on every successful import commit
   affecting that classroom.
@@ -402,8 +409,15 @@ Each requirement below is complete and implementable; none are placeholders.
 * **Description:** Compute Classical Test Theory statistics per item — difficulty index (p-value),
   point-biserial discrimination, and distractor selection frequency.
 * **Priority:** Medium
-* **Acceptance Criteria:** Calculations match a hand-verified reference dataset to four decimal
-  places.
+* **Business Rule:** Difficulty index at school scope is Level 1-sufficient — computable directly
+  from a Level 1 source's own published per-item statistics where available (e.g., O-NET's ฉบับที่
+  3). Discrimination index and distractor selection frequency structurally require a Level 2 (raw,
+  item-level) source and remain schema-ready-but-unpopulated — **Reserved for Future Assessment
+  Sources** — until one exists; see RFC-004's Assessment Data Classification
+  ([docs/rfcs/RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md#1-assessment-data-classification))
+  and [03-Database-Design.md §9](03-Database-Design.md#9-table-definitions--aggregation--materialized-summaries).
+* **Acceptance Criteria:** Calculations (or, for a Level 1 source, direct import of its published
+  figures) match a hand-verified reference dataset to four decimal places.
 * **Dependencies:** FR-009.
 
 ### FR-013 — Year-over-Year Trend Tracking
@@ -681,6 +695,23 @@ PRD-specific terms:
   (FR-012).
 * **Academic Year Template:** A per-year registry of column positions / header aliases used to
   parse that year's สทศ file layout (§23).
+* **Assessment Data Classification (Level 1 / Level 2 / Level 3):** The vocabulary
+  [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md#1-assessment-data-classification)
+  established for how much a given assessment source's data can support. **Level 1 (Official
+  Published Statistics)** — aggregated, benchmark-oriented, school-level-or-coarser figures a
+  testing authority publishes (O-NET, NT, RT). **Level 2 (Raw Assessment Data)** — student- and
+  item-level records (OMR, CBT, School Assessment, third-party, future AI-based; none built yet).
+  **Level 3 (Derived Analytics)** — never a source itself; always computed from Level 1 and/or
+  Level 2 data already imported (difficulty, discrimination, distractor analysis, mastery, AI
+  recommendation, trend).
+* **Assessment Adapter Layer:** The extension point one future assessment source plugs into —
+  parses that source's own file/API shape and knows whether it is a Level 1 or Level 2 source. See
+  [02-System-Architecture.md §8.1](02-System-Architecture.md#81-source-independence--assessment-adapter-layer-and-canonical-analytics-model).
+* **Canonical Analytics Model:** The one internal, source-agnostic record shape every Assessment
+  Adapter produces and the Analytics Engine always consumes. Grounded in the Normalization module's
+  (`app/Analytics/Normalization/*`, T2.5) existing `NormalizedRecord`/`NormalizedStandardMapping`
+  shape — not a new invention. See [02-System-Architecture.md
+  §8.1](02-System-Architecture.md#81-source-independence--assessment-adapter-layer-and-canonical-analytics-model).
 
 ### Coding Standard
 

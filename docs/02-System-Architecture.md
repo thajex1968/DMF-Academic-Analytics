@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-002 |
-| **Version** | 2.0.3 |
+| **Version** | 2.0.4 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-02 |
+| **Date** | 2026-07-04 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [01-PRD](01-PRD.md) · [03-Database-Design](03-Database-Design.md) · [Architecture-Decision-Record](Architecture-Decision-Record.md) · [Architecture-Principles](Architecture-Principles.md) · [decisions/README](../decisions/README.md) |
 
@@ -21,6 +21,7 @@
 | 2.0.1 | 2026-07-02 | QA fix (see [Documentation-QA-Report.md](Documentation-QA-Report.md)): corrected eight `App\` namespace references in §3–§4 to the documented `DMF\` root (§5 always said `DMF\`, but the diagrams had not been updated to match). Frozen as part of the DLAP Documentation Baseline v2.0.0 ([00-Project-Overview.md §13](00-Project-Overview.md#13-documentation-freeze)). | DMF Platform Team |
 | 2.0.2 | 2026-07-02 | Post-Freeze Amendment. §18 updated to route implementation-level decisions to the new [`decisions/`](../decisions/README.md) folder (Implementation Decision Records) instead of `docs/adr/`, which remains for architecture-level decisions only. No change to any module boundary, layer, or v1.0 functional behavior. | DMF Platform Team |
 | 2.0.3 | 2026-07-03 | Post-Freeze Amendment, made during Module 2 implementation. §16 updated: the `Config::fromEnvironment()` prefix changed from `'ONET_'` to `'DLAP_'` — no external system had ever deployed against the old prefix, so there was no backward-compatibility cost. See [decisions/IDR-006](../decisions/IDR-006-dlap-env-prefix.md). | DMF Platform Team |
+| 2.0.4 | 2026-07-04 | Post-Freeze Amendment — documentation alignment with approved [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) (no module boundary, layer, or v1.0 functional behavior change). §1 names **Source Independence** explicitly as a standing architectural principle. Added new §8.1 (Assessment Adapter Layer, Canonical Analytics Model), naming the Normalization module (T2.5) as the Canonical Analytics Model's first real instance, with RFC-004's source-independence diagram. | DMF Platform Team |
 
 ## Table of Contents
 
@@ -78,6 +79,14 @@ architecture-specific consequences of those principles are worth calling out dir
    internally (`Contract\*` interfaces).
 2. **No infrastructure the shared host doesn't provide** — every design decision in this document
    is checked against the constraints in [§13](#13-deployment-architecture).
+
+A third, standing since this document's v2.0.0 rename and formalized by
+[RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) after Sprint 4 planning surfaced the
+need to state it explicitly: **Source Independence** — this platform is a Multi-Source Assessment
+Analytics Platform, not an O-NET-specific one; O-NET is the first *evidenced* assessment source, not
+a template every future source (NT, RT, OMR, CBT, School Assessment, third-party, future AI-based)
+must conform to. [§8.1](#81-source-independence--assessment-adapter-layer-and-canonical-analytics-model)
+names the concrete extension point this implies.
 
 ## 2. Context Diagram
 
@@ -325,9 +334,55 @@ commit time**, not by computing summaries on every dashboard request:
 * On every successful import commit ([§7](#7-import-pipeline-architecture)), the Analytics module
   recomputes and upserts the affected rows of `standard_performance_summary` (classroom, grade,
   and school tiers) and `question_analysis` — see
-  [03-Database-Design §9](03-Database-Design.md#9-table-definitions--aggregation--materialized-summaries).
+  [03-Database-Design §9](03-Database-Design.md#9-table-definitions--aggregation--materialized-summaries)
+  and, for which recompute path runs, [§14 there](03-Database-Design.md#14-aggregation-recompute-strategy).
 * Dashboard reads are therefore simple, indexed `SELECT`s against summary tables, not aggregate
   queries over raw item-response rows.
+
+### 8.1 Source Independence — Assessment Adapter Layer and Canonical Analytics Model
+
+Clarified by [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) (documentation only —
+no new layer bolted onto the architecture below; a naming of two things that already exist in
+embryonic form). This module's Repository → Import → Normalization → Analytics → Dashboard pipeline
+makes no structural assumption about which system produced the imported data — a repository is
+equally pure CRUD whether a row came from an O-NET-report-derived file, an OMR export, a CBT API
+response, or a future AI-based assessment's output:
+
+```mermaid
+flowchart TD
+    subgraph Sources["Assessment Sources (Level 1 / Level 2)"]
+        ONET["O-NET"]
+        NT["NT"]
+        RT["RT"]
+        CBT["CBT"]
+        OMR["OMR"]
+        SCHOOL["School Exam"]
+    end
+    Sources --> Adapter["Assessment Adapter Layer\n(one adapter per source)"]
+    Adapter --> Canonical["Canonical Analytics Model\n(source-agnostic records)"]
+    Canonical --> Engine["Analytics Engine"]
+    Engine --> Dashboard["Dashboard"]
+```
+
+* **Assessment Adapter Layer** — one adapter per assessment source, owning everything specific to
+  that source: parsing its file/API shape, and knowing whether that source is **Level 1** (already
+  aggregated — see [03-Database-Design §14](03-Database-Design.md#14-aggregation-recompute-strategy))
+  or **Level 2** (raw item response), and translating accordingly. A Level 1 adapter emits
+  already-aggregated Canonical records directly; a future Level 2 adapter (OMR, CBT, etc.) computes
+  per-item Canonical records from raw responses before they ever leave the adapter. **The Analytics
+  Engine never needs to know which kind of adapter produced its input.**
+* **Canonical Analytics Model** — the one internal shape every adapter produces and the Analytics
+  Engine always consumes, regardless of source. This is not a new invention: it is the pattern the
+  Normalization module (`app/Analytics/Normalization/*`, T2.5) already implements today —
+  `ItemIndicatorNormalizer` turns per-response evidence into a source-agnostic
+  `NormalizedRecord`/`NormalizedStandardMapping` shape, resolved against the same
+  `learning_indicators`/`learning_standards`/`learning_strands` catalogue regardless of where the
+  response came from. Normalization (T2.5) is this model's first real instance, not a parallel
+  concept invented for a future source.
+
+Designing the Assessment Adapter interface itself, or any adapter beyond the one O-NET evidence
+already justifies, is out of scope here — see
+[RFC-004's Non-Goals](rfcs/RFC-004-multi-source-analytics-architecture.md#non-goals).
 * Where a lightweight cache is still useful (e.g., the standards catalogue, which rarely changes),
   `dmf-core`'s `Contract\CacheInterface` is implemented with a simple file-based cache under
   `storage/cache/`, avoiding a new infrastructure dependency.

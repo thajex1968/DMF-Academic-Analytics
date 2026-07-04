@@ -63,4 +63,20 @@ final class AssessmentRepository extends AbstractRepository
 
         return $statement->rowCount() > 0;
     }
+
+    /**
+     * Dashboard Data API (Sprint 4 Phase 3) — the assessment a Dashboard
+     * request reports on, since `Dmf\Core\Http\Request` has no way to carry
+     * a caller-supplied assessment id (decisions/IDR-011 §2).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findLatest(): ?array
+    {
+        $row = $this->connection
+            ->execute('SELECT * FROM assessments ORDER BY academic_year DESC, id DESC LIMIT 1')
+            ->fetch();
+
+        return $row === false ? null : $row;
+    }
 }

@@ -6,9 +6,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-003 |
-| **Version** | 2.0.2 |
+| **Version** | 2.0.3 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-03 |
+| **Date** | 2026-07-04 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [01-PRD](01-PRD.md) · [02-System-Architecture](02-System-Architecture.md) · [Architecture-Decision-Record](Architecture-Decision-Record.md) · [Architecture-Principles](Architecture-Principles.md) · [Data-Dictionary](Data-Dictionary.md) |
 
@@ -21,6 +21,7 @@
 | 2.0.0 | 2026-07-02 | **Re-centered the schema on the student.** Renamed `exam_types`→`assessment_types` and `exams`→`assessments` (every `exam_id`/`exam_type_id` FK renamed to `assessment_id`/`assessment_type_id`) to match the platform-wide DLAP terminology. Added **`student_enrollments`** (§3) to model a student's Grade 1–6 grade/classroom history as first-class data, and **`student_standard_mastery`** (§9) to hold per-student, longitudinal, per-indicator performance across academic years and assessment types. `students.classroom_id` is now documented as a denormalized pointer to the *current* enrollment, with `student_enrollments` as the source of truth. Rationale: [ADR-006](Architecture-Decision-Record.md#adr-006--why-a-generic-student-centric-assessment-schema). **No v1.0 functional scope change** — `student_standard_mastery` is schema-ready but not populated until the phase that ships the per-student report ([01-PRD.md §18](01-PRD.md#18-core-modules)). | DMF Platform Team |
 | 2.0.1 | 2026-07-02 | QA review (see [Documentation-QA-Report.md](Documentation-QA-Report.md)) found no defects in this document. Frozen as part of the DLAP Documentation Baseline v2.0.0 ([00-Project-Overview.md §13](00-Project-Overview.md#13-documentation-freeze)). | DMF Platform Team |
 | 2.0.2 | 2026-07-03 | Post-Freeze Amendment (T2.6, FR-007/FR-008): extended `import_logs.event`'s vocabulary from 6 to 10 values, adding `duplicate_found`, `import_started`, `retry`, `rollback` — the events the new Duplicate Detection + Audit Trail layer (`app/Import/Audit/*`) needs to represent that the pre-existing pipeline-stage events could not. See [decisions/IDR-008](../decisions/IDR-008-import-audit-event-vocabulary-extension.md). | DMF Platform Team |
+| 2.0.3 | 2026-07-04 | Post-Freeze Amendment — documentation alignment with approved [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) (no schema, migration, or v1.0 behavior change). Clarified `student_question_responses`'s documented producer from an implied O-NET source to "any Level 2 source — none built yet" ([§8](#8-table-definitions--scores--responses)). Labeled `question_analysis.discrimination_index`/`.distractor_frequency_json` and `.difficulty_index` (classroom scope) **Reserved for Future Assessment Sources**, and `.difficulty_index` (school scope) as Level 1-sufficient/in-scope-now ([§9](#9-table-definitions--aggregation--materialized-summaries)). Added an explicit open-question note to `standard_performance_summary` deferring its indicator-vs-standard grain mismatch to a future ADR, without presuming that ADR's answer. Rewrote [§14](#14-aggregation-recompute-strategy) to describe the two source-Level recompute paths (Level 1 direct upsert vs. Level 2 via `student_question_responses`) that were previously described as a single, implicitly-Level-2-only path. See [decisions/README.md](../decisions/README.md) for why this is a documentation clarification, not a new ADR. | DMF Platform Team |
 
 ## Table of Contents
 
@@ -356,6 +357,17 @@ FR-008's full audit trail is the append-only sequence of rows in this table per 
 | | | | UNIQUE (student_id, assessment_id) | | One committed score per student per assessment (FR-007). |
 
 ### `student_question_responses`
+**Producer, clarified by [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) — schema
+unchanged:** this table's per-student, per-item shape can only be populated by a **Level 2 (Raw
+Assessment Data)** source — OMR, CBT, School Assessment, a third-party assessment platform, or a
+future AI-based assessment system, none of which are built yet. A **Level 1 (Official Published
+Statistics)** source such as O-NET never populates this table: RFC-004's evidence review of the
+official สทศ report set confirmed no report edition publishes a per-student item response — the
+finest per-student report (ฉบับที่ 1) stops at subject totals, and the finest per-item report
+(ฉบับที่ 3) is aggregated at school level and above. This is expected, source-level behavior, not a
+defect — see [§14](#14-aggregation-recompute-strategy) for how a Level 1 source still populates
+`standard_performance_summary` without ever writing a row here.
+
 | Column | Type | Null | Key | Default | Description |
 |---|---|---|---|---|---|
 | id | BIGINT UNSIGNED | NO | PK, AUTO_INCREMENT | — | |
@@ -369,13 +381,24 @@ FR-008's full audit trail is the append-only sequence of rows in this table per 
 ## 9. Table Definitions — Aggregation & Materialized Summaries
 
 ### `standard_performance_summary`
+**Open question, deliberately not resolved here ([RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md)
+Analysis §4):** this table is keyed on `indicator_id`, but a Level 1 source such as O-NET can only
+ever populate it at `standard_id` grain — no evidenced Level 1 source publishes below standard
+grain. How a standard-grain-only Level 1 source should populate an indicator-grain row (and whether
+the `scope` enum below should eventually name the additional comparison tiers O-NET evidences —
+school-size, location, province, affiliation, region, country) is explicitly deferred to a future
+ADR. This section does **not** presume that ADR's answer — in particular, it does not presume
+`indicator_id` will be replaced by `standard_id`; a well-tagged Level 2 source could populate this
+table at true indicator grain without difficulty, so the schema is deliberately not redesigned
+around the coarsest evidenced source.
+
 | Column | Type | Null | Key | Default | Description |
 |---|---|---|---|---|---|
 | id | BIGINT UNSIGNED | NO | PK, AUTO_INCREMENT | — | |
 | assessment_type_id | TINYINT UNSIGNED | NO | FK → assessment_types.id | — | Lets a future multi-assessment-type dashboard filter/compare by type; always `ONET` in v1.0. |
 | scope | ENUM('classroom','grade','school') | NO | | — | Aggregation tier ([02-System-Architecture §8](02-System-Architecture.md#8-analytics--aggregation-architecture)). |
 | scope_id | INT UNSIGNED | NO | | — | `classroom_id`, or `school_id` for `grade`/`school` scope. |
-| indicator_id | INT UNSIGNED | NO | FK → learning_indicators.id | — | |
+| indicator_id | INT UNSIGNED | NO | FK → learning_indicators.id | — | See the open-question note above: a Level 1 source populates this at the finest grain it actually publishes, which may be coarser than true indicator grain. |
 | academic_year | INT UNSIGNED | NO | | — | |
 | student_count | INT UNSIGNED | NO | | — | Denominator for percent_correct. |
 | percent_correct | DECIMAL(5,2) | NO | | — | 0.00–100.00. |
@@ -409,17 +432,25 @@ progress on `ตัวชี้วัด` X from Grade 1 to Grade 6" view reads 
 > ([01-PRD.md §18](01-PRD.md#18-core-modules), [00-Project-Overview.md §9](00-Project-Overview.md#9-roadmap)).
 
 ### `question_analysis` (formerly `item_statistics`)
+**Per-column source-Level requirement ([RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md)
+Analysis §3) — no column removed or redesigned:**
+
 | Column | Type | Null | Key | Default | Description |
 |---|---|---|---|---|---|
 | id | BIGINT UNSIGNED | NO | PK, AUTO_INCREMENT | — | |
 | question_id | INT UNSIGNED | NO | FK → questions.id | — | |
 | scope | ENUM('classroom','school') | NO | | — | |
 | scope_id | INT UNSIGNED | NO | | — | |
-| difficulty_index | DECIMAL(4,3) | NO | | — | CTT p-value (FR-012). |
-| discrimination_index | DECIMAL(4,3) | NO | | — | Point-biserial correlation. |
-| distractor_frequency_json | JSON | NO | | — | `{"1": 0.10, "2": 0.62, "3": 0.20, "4": 0.08}`. |
+| difficulty_index | DECIMAL(4,3) | NO | | — | CTT p-value (FR-012). **School scope: Level 1-sufficient** — in scope now, sourced from a Level 1 source's own published per-item percent-correct (O-NET's ฉบับที่ 3) where available. **Classroom scope: Level 2-required — Reserved for Future Assessment Sources**, since no evidenced Level 1 source publishes below school scope. |
+| discrimination_index | DECIMAL(4,3) | NO | | — | Point-biserial correlation. **Level 2-required, always — Reserved for Future Assessment Sources.** Structurally absent from every evidenced Level 1 source (needs per-student item correctness correlated against per-student total score); remains nullable in practice until a Level 2 source exists. |
+| distractor_frequency_json | JSON | NO | | — | `{"1": 0.10, "2": 0.62, "3": 0.20, "4": 0.08}`. **Level 2-required, always — Reserved for Future Assessment Sources.** Needs per-student selected choice, which no evidenced Level 1 source publishes. |
 | last_computed_at | DATETIME | NO | | CURRENT_TIMESTAMP | |
 | | | | UNIQUE (question_id, scope, scope_id) | | |
+
+An absent value in a **Reserved for Future Assessment Sources** column, for an import sourced from a
+Level 1-only assessment type, is expected application behavior — not a recompute bug (see
+[Data-Dictionary.md](Data-Dictionary.md), which extends the same distinction to its validation
+language for this table).
 
 ## 10. Table Definitions — Reporting, Diagnostics & Platform
 
@@ -569,19 +600,38 @@ matches the constraint noted in `dmf-core/docs/platform-architecture.md §9`.
 
 ## 14. Aggregation Recompute Strategy
 
-On every import commit ([02-System-Architecture §7](02-System-Architecture.md#7-import-pipeline-architecture)):
+**Two recompute paths, one summary schema — clarified by
+[RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) Analysis §6, no schema or v1.0
+behavior change.** Which path runs is a property of the assessment's source **Level**
+([RFC-004 Analysis §1](rfcs/RFC-004-multi-source-analytics-architecture.md#1-assessment-data-classification)),
+decided by that source's Assessment Adapter, not by `standard_performance_summary`/`question_analysis`
+themselves — both tables are written the same way regardless of which path produced the row:
 
-1. Identify affected `(classroom_id, indicator_id, academic_year, assessment_type_id)` tuples from
-   the newly committed `student_question_responses`.
-2. Recompute `percent_correct` for each affected tuple at `scope='classroom'`, then roll up to
-   `scope='grade'` and `scope='school'` for the same `indicator_id`/`academic_year`/`assessment_type_id`.
-3. Upsert (`INSERT ... ON DUPLICATE KEY UPDATE`) into `standard_performance_summary`.
-4. Recompute `question_analysis` for every `question_id` present in the commit, at both
-   `classroom` and `school` scope.
-5. **v1.0: does not** recompute `student_standard_mastery` — see the status note in
-   [§9](#9-table-definitions--aggregation--materialized-summaries). When the per-student report
-   phase begins, this step is added here as step 5, keyed off the same
-   `student_question_responses` rows already being processed in step 1.
+* **Level 2 path (raw, item-level source — OMR, CBT, School Assessment, third-party, future
+  AI-based; none built yet):** on every import commit
+  ([02-System-Architecture §7](02-System-Architecture.md#7-import-pipeline-architecture)):
+  1. Identify affected `(classroom_id, indicator_id, academic_year, assessment_type_id)` tuples from
+     the newly committed `student_question_responses`.
+  2. Recompute `percent_correct` for each affected tuple at `scope='classroom'`, then roll up to
+     `scope='grade'` and `scope='school'` for the same `indicator_id`/`academic_year`/`assessment_type_id`.
+  3. Upsert (`INSERT ... ON DUPLICATE KEY UPDATE`) into `standard_performance_summary`.
+  4. Recompute `question_analysis` for every `question_id` present in the commit, at both
+     `classroom` and `school` scope (all three statistic columns — see [§9](#9-table-definitions--aggregation--materialized-summaries)).
+* **Level 1 path (official published statistics — v1.0's only active path, via O-NET):** the
+  source publishes its own already-aggregated figures (school-level standard/strand/subject
+  statistics, per-item school-level percent-correct) rather than per-student item responses — see
+  [§8](#8-table-definitions--scores--responses)'s note on `student_question_responses`. The
+  Assessment Adapter for that source upserts `standard_performance_summary` (and `question_analysis.difficulty_index`
+  at school scope only) directly from the published figures, at whatever scope/grain that source
+  actually publishes ([RFC-004 Analysis §1](rfcs/RFC-004-multi-source-analytics-architecture.md#1-assessment-data-classification));
+  it never populates `student_question_responses`, and it never populates `question_analysis.discrimination_index`/`.distractor_frequency_json`,
+  which stay `NULL`-equivalent/unset — **Reserved for Future Assessment Sources**, not a defect.
+
+`student_standard_mastery` is **not** recomputed by either path in v1.0 — see the status note in
+[§9](#9-table-definitions--aggregation--materialized-summaries). When the per-student report phase
+begins, its recompute step is added to whichever path(s) have Level 2 data available to aggregate
+from ([RFC-004 Analysis §1](rfcs/RFC-004-multi-source-analytics-architecture.md#1-assessment-data-classification)),
+since a per-student mastery figure structurally requires Level 2 evidence.
 
 This keeps summary tables always consistent with the latest committed data, without requiring a
 scheduled full-table rebuild — a targeted recompute is cheap enough to run inline within the same

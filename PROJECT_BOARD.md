@@ -487,9 +487,13 @@ design choice this forced: [decisions/IDR-010](decisions/IDR-010-web-application
 ## In Progress
 
 ## Review
-- [ ] Web Application Foundation — T1.6/T1.7 (Staff Authentication (FR-001) + Role-Scoped Dashboard
-      Shell (FR-002) — [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — given directly by
-      instruction, re-scoped to the SPA architecture per [decisions/IDR-010](decisions/IDR-010-web-application-foundation.md).
+
+## Done
+- [x] Web Application Foundation — T1.6/T1.7 (Staff Authentication (FR-001) + Role-Scoped Dashboard
+      Shell (FR-002) — [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task)) — **Approved**
+      (committed `a053f65` "feat(web): complete Sprint 3 - Web Application Foundation", tagged
+      `v0.4.0-web-foundation`, merged to `main`). Given directly by instruction, re-scoped to the
+      SPA architecture per [decisions/IDR-010](decisions/IDR-010-web-application-foundation.md).
       No analytics yet — dashboard shell only.
       - **Auth layer** (`app/Auth/`, new — mirrors `grade.dmf.ac.th`'s actual `app/Auth/*` layout,
         not the illustrative `app/Action/*` tree in `02-System-Architecture.md §5`, which no module
@@ -580,13 +584,378 @@ design choice this forced: [decisions/IDR-010](decisions/IDR-010-web-application
 
 ---
 
+# Sprint 4 – Analytics Engine
+
+Maps to [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) Phase 3 (Standards Mapping & Analytics),
+governed by [docs/rfcs/RFC-004](docs/rfcs/RFC-004-multi-source-analytics-architecture.md) (approved)
+— Source Independence, the Level 1/2/3 Assessment Data Classification, Assessment Adapter Layer, and
+Canonical Analytics Model (see `IMPLEMENTATION_GUIDE.md` Phase 3's intro and T3.2). **Phase 1**
+(Analytics Domain Foundation — Repository → Service → DTO, no presentation layer) is complete and
+approved; **Phase 2** (Analytics Calculators — the first generation of concrete calculators over
+that foundation) is below, awaiting review. No dashboard, controller, API, chart, AI, Import Engine
+change, or database change is in scope until a later phase of this same sprint.
+
+## Todo
+
+## In Progress
+
+## Review
+- [ ] Analytics Aggregation & Dashboard Data API — Sprint 4 Phase 3
+      ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), Phase 3 intro/T3.2,
+      decisions/IDR-011) — given directly by instruction, scoped to Analytics Aggregation,
+      Dashboard DTOs, Dashboard Data API, Dashboard Cache, Dashboard Health: no HTML, no charts, no
+      JavaScript visualization, no AI recommendation. Import Engine and database schema untouched
+      (one new read-only repository added, no migration).
+      - **Real architecture conflict found and resolved before writing any Action, per
+        [decisions/IDR-011](decisions/IDR-011-dashboard-api-architecture.md)**: the instruction
+        specified REST-style paths (`GET /api/dashboard/overview`, etc.) and an implicit
+        `assessment_id` query parameter; `Dmf\Core\Http\Router` only supports `"METHOD:action"`
+        dispatch (its own docblock says so) and `Dmf\Core\Http\Request` (`final`) has no method to
+        read an arbitrary `GET` query parameter at all — the same class of constraint
+        [IDR-010](decisions/IDR-010-web-application-foundation.md) already resolved once for
+        Sprint 3. Resolved the same way: `snake_case` `?action=` names preserving the resource
+        intent (`dashboard_overview`, `dashboard_assessment`, `dashboard_subjects`,
+        `dashboard_benchmark`, `dashboard_health` — matching `docs/Naming-Convention.md §3`, which
+        already anticipated exactly this), and every Dashboard endpoint reports on **the latest
+        registered assessment** (`AssessmentRepository::findLatest()`, new) rather than an
+        unsupportable caller-supplied id. No new router, path parser, or `Request` subclass was
+        built — see IDR-011 for the full reasoning and every alternative considered.
+      - **Aggregation** (`app/Analytics/Aggregation/`, all new): `AssessmentSummaryAggregator`,
+        `SubjectSummaryAggregator`, `StrandSummaryAggregator`, `StandardSummaryAggregator`,
+        `BenchmarkAggregator` — each a pure reshape of one calculator's `Result\*` records (or, for
+        Assessment, of `AnalyticsContext.assessmentRecord` directly, since no calculator produces an
+        assessment-grain result) into a Dashboard DTO; no new computation anywhere.
+        `AnalyticsAggregationService` exposes both `aggregate(AnalyticsContext, AnalyticsResultInterface[]): DashboardResponse`
+        (the pure, no-I/O merge Module 1 describes — tested directly with hand-built fixtures) and
+        `forLatestAssessment(): ?DashboardResponse` (the one method every Dashboard Action actually
+        calls — internally: `AssessmentRepository` → `AnalyticsReadRepository` →
+        `ItemIndicatorNormalizer` (T2.5) → `AnalyticsContextFactory` (Phase 1) → `AnalyticsPipeline`
+        (Phase 1/2, unchanged) → `aggregate()`, optionally cached; see IDR-011 §3 for why this is
+        one class, not a fifth unrequested layer). `DashboardHealthAggregator` builds Module 7's
+        read-only snapshot from `ImportJobRepository`/`AssessmentRepository`/`StudentRepository`.
+      - **Dashboard DTOs** (`app/Analytics/Dashboard/`, all new, all `final`/readonly):
+        `DashboardMetadata`, `DashboardAssessment`, `DashboardSubject`, `DashboardStrand`,
+        `DashboardStandard`, `DashboardBenchmark`, `DashboardCard`, `DashboardAlert` (+
+        `DashboardAlertLevel` enum), `DashboardDataset`, `DashboardSummary`, `DashboardResponse`,
+        `DashboardHealth` — plus `DashboardResponseSerializer`, the one class that turns every DTO
+        into a plain, `snake_case` JSON-ready array, so all five Actions serialize identically
+        instead of duplicating array-shaping five times. No HTML, no Bootstrap, no Chart.js
+        anywhere in this namespace.
+      - **Cache** (`app/Analytics/Cache/`, all new, Module 6): `DashboardCacheInterface extends
+        Dmf\Core\Contract\CacheInterface` (a zero-new-method marker interface — `dmf-core` already
+        provides the exact `get`/`set`/`delete`/`has`/`clear` cache-key/TTL/invalidate shape asked
+        for; see IDR-011 §4 for why a parallel contract wasn't reinvented from scratch),
+        `InMemoryDashboardCache` (the only implementation — plain in-process array, no Redis, per
+        `docs/02-System-Architecture.md §16`'s shared-hosting constraint). Every consumer takes the
+        cache as an optional (`?DashboardCacheInterface = null`) dependency, so the Dashboard Data
+        API still computes a correct result when no cache is constructed at all.
+      - **Repository** (`app/Repository/`): `AnalyticsReadRepository` (new) —
+        `findResponsesForAssessment(int): array`, joining `student_question_responses` to
+        `questions` by `assessment_id` (a column the responses table itself doesn't carry); read-only
+        by a thrown `\LogicException` on `create()`/`update()`/`delete()`, not just by convention
+        (IDR-011 §6). `AssessmentRepository::findLatest()` (new, additive) — `ORDER BY academic_year
+        DESC, id DESC LIMIT 1`. `BenchmarkRepository`/`DashboardRepository` (Module 5's other named
+        examples) were **not** built — no table anywhere stores a benchmark comparison figure yet
+        (IDR-011 §5); building one against a non-existent table would repeat the exact
+        fabricate-data mistake this project has consistently declined to make (T1.4, T2.2).
+      - **Actions & Routes** (`app/Action/Dashboard/`, all new; `public_html/api/index.php`,
+        modified): `DashboardOverviewAction` (the full `DashboardResponse`), `DashboardAssessmentAction`
+        (metadata + assessments), `DashboardSubjectAction` (metadata + subjects + the strands/standards
+        that only make sense nested under a subject), `DashboardBenchmarkAction` (metadata +
+        benchmarks — empty today, honestly, see below), `DashboardHealthAction` (Module 7's
+        snapshot). Every Action is thin — it calls `AnalyticsAggregationService`/
+        `DashboardHealthAggregator` and serializes the result, never calculating anything itself
+        (Architecture Rules). All five registered behind the existing `StaffAuthMiddleware` — any
+        authenticated principal, matching `dashboard_summary`'s existing access level; no new
+        role/policy was invented since nothing in this phase's scope asked for one.
+      - **Honest current behavior, not a stub — see IDR-011 §7**: no Level 2 Assessment Adapter
+        exists yet (RFC-004), so `student_question_responses` has no writer anywhere in this
+        codebase and is empty in any real deployment. The Dashboard Data API is wired end-to-end
+        against real repositories; it reports empty/all-zero figures today because that is the
+        honest state of the data — not because anything is stubbed or faked. It starts reporting
+        real figures the moment any future Level 2 Assessment Adapter commits rows, with no
+        Dashboard-side code change required.
+      - **Verified for real**: `composer dump-autoload` — 2423 classes (same two pre-existing PSR-4
+        casing notes, unrelated). `vendor/bin/phpunit` — **397/397 tests, 1265 assertions**, all
+        passing (64 new, including a full end-to-end orchestration test —
+        `AnalyticsAggregationServiceTest::testForLatestAssessmentOrchestratesTheFullPipelineAgainstTheGoldenDataset` —
+        driving the real Normalization Golden Dataset through every real repository, calculator, and
+        aggregator over a mocked `ConnectionInterface`, plus a cache-hit test proving a second call
+        is served from cache without re-querying). `vendor/bin/phpstan analyse` — `[OK] No errors`
+        at level 8. `vendor/bin/phpcs --standard=.phpcs.xml` — **0 errors, 0 warnings among the 58
+        files this phase touched** (several real line-length/multi-line-declaration findings in
+        this phase's own new test files, found and fixed — one via `phpcbf` — before re-verifying).
+        `php -l public_html/api/index.php` — no syntax errors. The pre-existing repo-wide CRLF
+        findings (T2.7's Done entry) remain on files this phase's `Edit` calls touched a
+        pre-existing line in (`AssessmentRepository.php`, its test, `DashboardSummaryAction.php`,
+        its test) — same already-deferred issue, no new file affected by it.
+      - **Known limitations**: `DashboardBenchmarkAction`/`BenchmarkCalculator` will report empty
+        results in any real environment until a Level 1 Assessment Adapter populates
+        `AnalyticsContext.benchmarkRecords` (unchanged limitation from Phase 2). `DashboardHealth.latestCalculation`
+        is always `null` — the Analytics Engine persists nothing of its own, so there is no stored
+        calculation history to report; every request recomputes live. Dashboard endpoints cannot
+        target a specific historical assessment (only "latest") until `dmf-core`'s `Request` gains
+        query-parameter support — out of this project's control to add unilaterally (IDR-011 §2).
+
+## Done
+- [x] Analytics Calculators — Sprint 4 Phase 2
+      ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), Phase 3 intro/T3.2) — given
+      directly by instruction, scoped to the first generation of calculators over Phase 1's Domain
+      Foundation: no discrimination, distractor analysis, student/indicator mastery, dashboard, REST
+      API, charts, caching, AI recommendation, or export. Import Engine and database schema untouched.
+      - **Contracts** (`app/Analytics/Contracts/`, new): `CalculatorPriority` (int-backed enum,
+        `HIGHEST`(100)…`LOWEST`(0) — higher runs first), `CalculatorCapabilities` (a calculator's own
+        declared Level 1/Level 2 support — never an inspection of what actually produced its input),
+        `CalculatorExecutionContext` (wraps `AnalyticsContext` with one `executedAt` shared by every
+        calculator in a single pipeline run). **Extended** `AnalyticsCalculatorInterface` (Phase
+        1) — added `priority()`/`capabilities()`, and `calculate()` now takes a
+        `CalculatorExecutionContext` instead of a raw `AnalyticsContext` — safe because Phase 1 built
+        zero concrete calculators. **Extended** `AnalyticsResultInterface`/`AnalyticsResult` (Phase
+        1) with a `records(): mixed[]` accessor — Phase 1 had no way to carry a calculator's actual
+        computed output, only its summary counts; this is additive, every Phase 1 accessor is
+        unchanged, and the two Phase 1 tests that exercise `build()` were updated to pass/assert
+        `records` alongside what they already asserted.
+      - **Canonical extension** (`app/Analytics/Canonical/`, new): `BenchmarkScope` (enum:
+        school/province/region/country — RFC-004's evidenced O-NET comparison tiers),
+        `BenchmarkAnalyticsRecord` (one externally-published comparison figure; populated only by a
+        future Level 1 Assessment Adapter, none built yet). **Extended** `AnalyticsContext` (Phase 1)
+        with `benchmarkRecords`, defaulted to `[]` so every Phase 1 call site (including
+        `AnalyticsContextFactory`, which has no source of benchmark data) is unaffected.
+      - **Pipeline** (`app/Analytics/Pipeline/AnalyticsPipeline.php`, modified): now sorts registered
+        calculators by `CalculatorPriority` (descending, stable for equal priority) before running,
+        rather than registration order, and wraps the `AnalyticsContext` in one shared
+        `CalculatorExecutionContext` per run — exactly what "Pipeline must support future plug-in
+        calculators" and "Execution order must use CalculatorPriority" asked for.
+      - **Calculators** (`app/Analytics/Calculators/`, all new, each `priority()`/`capabilities()`
+        declared, each reads only Canonical DTOs, never assessment type/source/provider):
+        `DifficultyCalculator` (HIGH priority; per-question CTT p-value from
+        `QuestionAnalyticsRecord.correctCount/responseCount` — the same pooled shape regardless of
+        whether a Level 1 or Level 2 path populated it, so "supports Level 1 and Level 2" holds
+        without the calculator ever branching on source); `BenchmarkCalculator` (LOW priority;
+        compares each `benchmarkRecords` entry against the matching `SubjectAnalyticsRecord`'s own
+        percent-correct — reads only what's already in the context, never fetches a comparison value
+        itself); `StandardPerformanceCalculator` and `SubjectPerformanceCalculator` (NORMAL priority;
+        percent-correct is always computed when responses exist; mean/median/min/max/standard
+        deviation — and, for Subject, average/highest/lowest/distribution — are flagged one
+        deliberate limitation, not silently skipped or fabricated: see below);
+        `StrandPerformanceCalculator` (NORMAL priority; a flat, fully-computable `StrandSummary` —
+        percent-correct plus the pooled counts, "no visualization" per instruction). Every calculator
+        emits an `AnalyticsWarning`, never an exception, for any input it cannot compute from (zero
+        responses, no matching benchmark subject).
+      - **Result Model** (`app/Analytics/Result/`, all new): `DifficultyResult`, `BenchmarkResult`,
+        `StandardResult`, `SubjectResult`, `StrandResult` — pure data, no dashboard formatting,
+        embedded as each calculator's `AnalyticsResult::records()` payload.
+      - **Design decision, flagged rather than silently resolved**: Mean/Median/Min/Max/Standard
+        Deviation (Standard grain) and Average/Highest/Lowest/Distribution (Subject grain) all
+        require a per-student score distribution that the current Canonical Analytics Model does not
+        carry — `StandardAnalyticsRecord`/`SubjectAnalyticsRecord` only hold pooled
+        `studentCount`/`responseCount`/`correctCount`, per Phase 1's own "raw counts only, no
+        fabrication" discipline. Rather than inventing a per-student field Phase 1 didn't build, or
+        silently dropping the requirement, both calculators compute what genuinely is available
+        (percent-correct) and return `null` for the rest, each accompanied by an `AnalyticsWarning`
+        naming exactly which statistics are unavailable and why — "if unavailable return
+        AnalyticsWarning instead of throwing exceptions," applied uniformly rather than only where
+        the instruction happened to say it explicitly (Module 4). Extending the Canonical Model with
+        a real per-student distribution, if wanted, is a follow-on decision, not assumed here.
+      - **Verified for real**: `composer dump-autoload` — 2365 classes (same two pre-existing PSR-4
+        casing notes, unrelated). `vendor/bin/phpunit` — **333/333 tests, 1029 assertions**, all
+        passing (35 new: 6 new Canonical/Contracts DTO tests — `BenchmarkAnalyticsRecord`,
+        `BenchmarkScope`, `CalculatorPriority`, `CalculatorCapabilities`, `CalculatorExecutionContext`,
+        plus `AnalyticsContext`'s new default-value case — 5 new Result DTO tests, 20 calculator tests
+        across all five calculators including every "unavailable data → warning, not exception" path,
+        4 rewritten `AnalyticsPipelineTest` cases proving priority-order execution beats registration
+        order and equal-priority calculators keep registration order). `vendor/bin/phpstan analyse` —
+        `[OK] No errors` at level 8. `vendor/bin/phpcs --standard=.phpcs.xml` — **0 errors, 0
+        warnings among the 59 files this phase touched** (one real line-length warning found in this
+        phase's own `AnalyticsPipelineTest.php` — an overlong test method name — fixed and
+        re-verified before reporting). No new pre-existing-CRLF files were touched.
+      - **Known limitations**: `AnalyticsContext.benchmarkRecords` is populated only by hand-built
+        test fixtures today — no Assessment Adapter exists yet to supply a real benchmark figure, so
+        `BenchmarkCalculator` produces zero records in any real run until one is built (expected,
+        not a defect). `AnalyticsAggregatorInterface`/`AnalyticsDataProviderInterface` remain
+        unimplemented, unchanged from Phase 1.
+- [x] Analytics Domain Foundation — Sprint 4 Phase 1
+      ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), Phase 3 intro/T3.2) — given
+      directly by instruction, scoped to the Analytics Domain Layer only: no calculators, no
+      difficulty/discrimination/distractor/benchmark, no aggregation logic, no dashboard, no
+      controller, no API, no chart, no AI, no SQL/migration change. The Import Engine and database
+      schema were not touched.
+      - **Contracts** (`app/Analytics/Contracts/`, all new, no implementations):
+        `AnalyticsCalculatorInterface`, `AnalyticsResultInterface`, `AnalyticsAggregatorInterface`,
+        `AnalyticsDataProviderInterface`. Each interface's docblock states the source-independence
+        rule directly: an implementation must never inspect assessment type, source name, provider,
+        or report format — only the Assessment Adapter Layer (docs/02-System-Architecture.md §8.1)
+        knows those.
+      - **Canonical Analytics DTOs** (`app/Analytics/Canonical/`, all new, all `final`/readonly):
+        `AnalyticsMetadata` (assessment/subject/year/grade identity, no source field),
+        `AssessmentAnalyticsRecord`, `SubjectAnalyticsRecord`, `StrandAnalyticsRecord`,
+        `StandardAnalyticsRecord`, `QuestionAnalyticsRecord` (raw `studentCount`/`responseCount`/
+        `correctCount` tallies only — deliberately **no** `percentCorrect`, `difficultyIndex`, or any
+        other derived statistic; computing one is a future Calculator's job, not built in this
+        phase), `AnalyticsContext` (the one object every calculator will receive). `QuestionAnalyticsRecord.standardId`
+        names the question's *primary* standard only — indicator grain is deliberately not modeled,
+        consistent with RFC-004/docs/03-Database-Design.md §9's still-open indicator-vs-standard
+        grain question.
+      - **Context layer** (`app/Analytics/Context/AnalyticsContextFactory.php`, new):
+        `fromNormalizationResult(NormalizationResult, AnalyticsMetadata): AnalyticsContext` — pure
+        grouping and tallying of Normalization's (T2.5) existing output up through
+        question → standard → strand → subject → assessment grain. No Assessment Source logic: the
+        factory only ever reads each `NormalizedRecord`'s already-resolved standard/strand chain,
+        never an assessment type, source name, or provider. No percentage/index/average is computed
+        here — only counts, so this stays a Domain Foundation piece, not a calculator.
+      - **Pipeline** (`app/Analytics/Pipeline/AnalyticsPipeline.php`, new):
+        `run(AnalyticsContext): AnalyticsResultInterface[]` — executes every registered calculator
+        once, in registration order, against the same context. Pipeline only; zero calculators are
+        registered by anything in this phase, since `AnalyticsCalculatorInterface` has no
+        implementation yet.
+      - **Result layer** (`app/Analytics/Result/`, all new): `AnalyticsResult` (implements
+        `AnalyticsResultInterface`; `build()` derives an `AnalyticsSummary`'s counts from the
+        supplied warnings/issues), `AnalyticsWarning`, `AnalyticsIssue` (both `identifier` + `message`
+        — non-fatal vs. a specific record-level problem), `AnalyticsSummary` (calculator name, record
+        count, issue/warning counts, computed-at timestamp — no dashboard formatting).
+      - **Verified for real**: `composer dump-autoload` — 2335 classes (same two pre-existing PSR-4
+        casing notes as T2.3/T2.5's fixture classes, unrelated to this phase). `vendor/bin/phpunit`
+        — **298/298 tests, 874 assertions**, all passing (18 new: 7 Canonical DTO tests, 5 Result
+        tests, 3 Pipeline tests covering empty/sequential/ordered execution via mocked calculators,
+        3 `AnalyticsContextFactoryTest` cases including a full multi-grain grouping/tallying
+        assertion across a hand-built two-strand/three-standard/four-question fixture).
+        `vendor/bin/phpstan analyse` — `[OK] No errors` at level 8. `vendor/bin/phpcs
+        --standard=.phpcs.xml` — **0 errors, 0 warnings among the 30 files this phase touched** (one
+        real PSR-12 line-length warning found and fixed in `AnalyticsContextFactoryTest.php` during
+        this phase's own verification); the pre-existing repo-wide CRLF line-ending findings (T2.7's
+        Done entry — `core.autocrlf` root cause, still deferred to its own pass) remain, unrelated to
+        this phase.
+      - **Known limitations, by design per this phase's explicit scope**: zero
+        `AnalyticsCalculatorInterface`/`AnalyticsAggregatorInterface`/`AnalyticsDataProviderInterface`
+        implementations exist — `AnalyticsPipeline` is exercised only via mocked calculators in
+        tests. `AnalyticsContextFactory` is not wired behind `AnalyticsDataProviderInterface`, since
+        nothing yet calls it that would need that abstraction (YAGNI). No repository or database read
+        was added — the factory's only input is `NormalizationResult`, already in memory from a
+        Normalization run.
+
+---
+
+# Release Milestone — v0.5.0 "Analytics Engine Complete"
+
+Not a feature sprint — a release-hardening pass over Sprint 4 (Phases 1–3) and RFC-004's now-approved
+architecture: verify, stabilize, document, and prepare for production and the upcoming Dashboard
+UI sprint. No new business feature, analytics algorithm, Dashboard UI, AI, or database change.
+
+## Todo
+
+## In Progress
+
+## Review
+- [ ] Release Hardening — v0.5.0 "Analytics Engine Complete"
+      ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), covering all of Sprint 4) — given
+      directly by instruction: Architecture Verification, Codebase Audit, Pipeline Audit, API
+      Audit, Performance Review, Security Review (static only), Documentation Audit, Versioning,
+      Git Readiness, and a full quality-gate run. No refactor except to correct a genuine
+      violation found during the audit (one: see below).
+      - **Architecture Verification**: traced Repository → (Assessment Adapter, not yet built,
+        RFC-004 Non-Goals) → Normalization (T2.5) → Canonical Analytics Model (Phase 1) →
+        `AnalyticsPipeline` → 5 Calculators (Phase 2) → `AnalyticsAggregationService` (Phase 3) →
+        Dashboard Data API. Confirmed by dependency-graph inspection (`use` statements across every
+        `app/Analytics/*` sub-namespace): no source-specific vocabulary (assessment type, provider,
+        report format) appears in any executable line, only in docblocks stating the rule; no
+        `Action` imports a `Repository` except the pre-Analytics `DashboardSummaryAction`
+        (Sprint 3, predates this rule, out of this milestone's scope); every calculator is
+        dependency-free (no constructor at all) and imports no sibling calculator.
+      - **One real, minor architectural wrinkle found, not a violation**: `Contracts` and `Result`
+        namespaces mutually depend on each other (`AnalyticsResultInterface` references
+        `AnalyticsWarning`/`AnalyticsIssue`/`AnalyticsSummary` from `Result`; `AnalyticsResult`
+        implements `AnalyticsResultInterface` from `Contracts`) — a namespace-level cycle, not a
+        class-level one (no two classes require each other to load), so autoloading, PHPStan, and
+        every test are unaffected. Worth naming as technical debt (`Contracts`, ideally the most
+        abstract layer, depends downward on `Result`'s concrete DTOs); not corrected here per
+        "no refactoring unless required to correct violations" — nothing is actually broken.
+      - **One real, previously-unreported PHPCS violation found and fixed**:
+        `tests/Unit/Import/Cron/ImportJobRunnerTest.php` (T2.7-era, not touched by Sprint 4) had a
+        genuine `PSR12.ControlStructures.ControlStructureSpacing.FirstExpressionLine` error — a
+        multi-line `if` condition's first expression shared the opening-parenthesis line. Extracted
+        to a named boolean (`$isQueuedJobsLookup`), matching the pattern already used elsewhere in
+        this codebase; re-verified PHPCS clean and the file's 5 tests still passing.
+      - **One real, honest limitation found — not fixed, since fixing it is new work beyond this
+        milestone's scope**: `InMemoryDashboardCache` is constructed fresh on every HTTP request
+        inside the plain-procedural `public_html/api/index.php` front controller. Under standard
+        PHP-FPM request-per-process execution, this cache **never survives between requests** — its
+        300-second TTL is correct and its own unit tests genuinely prove the class's logic works
+        within one instance's lifetime, but in the real deployed system it is currently a no-op:
+        every request pays a full recompute. This is not a bug in the cache — it is a deployment-
+        model mismatch between "an in-process cache" and "a stateless per-request front controller."
+        Fixing it needs a persistence decision (APCu, file-based, or similar) that Module 6's own
+        "memory implementation only, no Redis, no external cache" instruction did not resolve — left
+        as an explicit, flagged follow-up decision (its own future IDR), not fixed unilaterally here.
+      - **Pipeline Audit**: `AnalyticsPipeline` sorts by `CalculatorPriority` (stable for equal
+        priority, confirmed by test), wraps context in one shared `CalculatorExecutionContext` per
+        run. `capabilities()` is fully implemented and tested on every calculator and the interface,
+        but **nothing yet reads it** — no orchestrator filters or gates execution by declared
+        Level 1/2 support. Inert-but-correct metadata today, not a defect (nothing in Phase 2's scope
+        asked the Pipeline to enforce it yet); flagged as known limitation.
+      - **API Audit**: all 6 dashboard routes (`dashboard_summary` plus the 5 new Phase 3 routes)
+        are registered behind `StaffAuthMiddleware` — verified directly against
+        `public_html/api/index.php`'s route table, no route bypasses it. JSON-only responses
+        throughout (`Dmf\Core\Http\Response` has no HTML-rendering path at all). No raw exception
+        message construction found anywhere in `app/Analytics`/`app/Action/Dashboard` (`getMessage()`
+        does not appear); `Router::dispatch()`'s existing catch-all plus `index.php`'s existing
+        500-message sanitization (both pre-existing, Sprint 3) remain the only exception boundary,
+        unchanged.
+      - **Performance Review**: `AnalyticsReadRepository::findResponsesForAssessment()` is one
+        query (a `JOIN`, not N+1); `AssessmentRepository::findLatest()` is one query;
+        `DashboardHealthAction` issues 4 queries total (2×`count()`, 1×`findLatest()`,
+        1×`findWhere('status','failed')`) — all bounded, no per-row query anywhere. Aggregation and
+        Pipeline are both O(n) over already-in-memory collections. The one real finding is the cache
+        deployment-model mismatch above.
+      - **Security Review (static only, no penetration testing)**: every dashboard route requires
+        authentication; the 5 new routes accept no user-controlled input at all (no query-parameter
+        support exists — decisions/IDR-011 §2), which is itself a reduced attack surface, not a gap.
+        `AnalyticsReadRepository`'s one query uses a bound parameter, no string interpolation. No
+        `var_dump`/`print_r`/debug output, no `TODO`/`FIXME` found anywhere in `app/Analytics`,
+        `app/Repository`, or `app/Action/Dashboard`.
+      - **Documentation Audit — one real, substantive gap found and fixed**: `Release-Notes.md` had
+        drifted badly behind actual progress — it still said only T1.1/T1.2 were done and had no
+        entry at all for `v0.2.0`–`v0.4.0`, despite all three being real, tagged git releases
+        (`v0.2.0-import-validation`, `v0.3.0-import-engine`, `v0.4.0-web-foundation`). Rewrote it
+        (→1.1.0) to accurately mark each as **Released** with real content, and added the new
+        `v0.5.0` entry. Logged as `00-Project-Overview.md`'s ninth Post-Freeze Amendment (→2.0.10).
+        Every other cross-referenced document (`01-PRD.md`, `02-System-Architecture.md`,
+        `03-Database-Design.md`, `Business-Flow.md`, `IMPLEMENTATION_GUIDE.md`, RFC-004,
+        `PROJECT_BOARD.md`) was already reconciled during the prior RFC-004 alignment pass and
+        Sprint 4's own entries — no further contradiction found.
+      - **Versioning**: `VERSION` (root) → `0.5.0`. `Release-Notes.md` v0.5.0 entry added
+        ("Analytics Engine Complete" — Sprint 4 Phase 1–3 plus RFC-004 alignment).
+      - **Git Readiness**: working tree has 14 modified + 34 new paths, all attributable to
+        RFC-004 alignment, Sprint 4 Phase 1–3, and this hardening pass — nothing stray. One item
+        flagged, not acted on: `Onet/` (33 MB of primary-source O-NET evidence files used for
+        RFC-004's research) is untracked and **not** covered by `.gitignore` — left for you to
+        decide whether it should be ignored or intentionally committed, since it may be
+        institution-specific reference data; not added to any suggested commit below.
+      - **Verified for real**: `composer dump-autoload` — 2423 classes (same two pre-existing
+        PSR-4 casing notes, unrelated). `vendor/bin/phpunit` — **397/397 tests, 1265 assertions**,
+        all passing. `vendor/bin/phpstan analyse` — `[OK] No errors` at level 8.
+        `vendor/bin/phpcs --standard=.phpcs.xml` — **132 errors remain, all
+        `Generic.Files.LineEndings.InvalidEOLChar`** (the same pre-existing, already-documented
+        `core.autocrlf` issue tracked since T2.7, explicitly deferred to its own pass each time it
+        has come up; confirmed no new occurrence and no other sniff violation anywhere in `app/` or
+        `tests/` after fixing the one genuine finding above).
+      - **Known limitations carried forward, unchanged**: no Level 1 or Level 2 Assessment Adapter
+        exists yet, so `student_question_responses` is empty in any real deployment and every
+        Dashboard endpoint honestly reports zero/empty figures (RFC-004; decisions/IDR-011 §7).
+        Dashboard endpoints report on "the latest assessment" only — no query-parameter support in
+        `dmf-core`'s `Request` (decisions/IDR-011 §2). The in-memory Dashboard cache does not persist
+        across requests (see above).
+
+## Done
+
+---
+
 ## Backlog (not yet in a sprint)
 
 Every Phase 2–6 task not yet scoped into a sprint (the five real named templates — `ONET-2569`,
 `ONET-2570`, `NT`, `RT`, `School Assessment` — once a real
 สทศ file specification is available; T2.3's structural/content validation against the database; the
-"resolve current classroom" service T1.5 also names; the PDF parser T2.1 also lists; all of Phase
-3+ analytics) moves onto a board here once scoped into a sprint — this file only carries active
-sprints, not the whole roadmap; see [docs/00-Project-Overview.md
-§9](docs/00-Project-Overview.md#9-roadmap) and [docs/Release-Notes.md](docs/Release-Notes.md) for
-the full multi-release plan.
+"resolve current classroom" service T1.5 also names; the PDF parser T2.1 also lists; Sprint 4 Phase
+2+ — concrete calculators, aggregation, dashboards, controllers, API, charts, AI) moves onto a board
+here once scoped into a sprint — this file only carries active sprints, not the whole roadmap; see
+[docs/00-Project-Overview.md §9](docs/00-Project-Overview.md#9-roadmap) and
+[docs/Release-Notes.md](docs/Release-Notes.md) for the full multi-release plan.

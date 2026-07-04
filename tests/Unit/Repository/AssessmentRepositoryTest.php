@@ -79,4 +79,34 @@ final class AssessmentRepositoryTest extends TestCase
 
         self::assertTrue($repository->delete(3));
     }
+
+    public function testFindLatestOrdersByAcademicYearThenIdDescending(): void
+    {
+        $row = ['id' => 5, 'subject_code' => 'MATH', 'academic_year' => 2569];
+        $statement = $this->createMock(PDOStatement::class);
+        $statement->method('fetch')->willReturn($row);
+
+        $connection = $this->createMock(ConnectionInterface::class);
+        $connection->expects(self::once())
+            ->method('execute')
+            ->with(self::stringContains('ORDER BY academic_year DESC, id DESC'))
+            ->willReturn($statement);
+
+        $repository = new AssessmentRepository($connection);
+
+        self::assertSame($row, $repository->findLatest());
+    }
+
+    public function testFindLatestReturnsNullWhenNoAssessmentExists(): void
+    {
+        $statement = $this->createMock(PDOStatement::class);
+        $statement->method('fetch')->willReturn(false);
+
+        $connection = $this->createMock(ConnectionInterface::class);
+        $connection->method('execute')->willReturn($statement);
+
+        $repository = new AssessmentRepository($connection);
+
+        self::assertNull($repository->findLatest());
+    }
 }

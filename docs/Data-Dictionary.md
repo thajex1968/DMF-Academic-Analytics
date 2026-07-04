@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-006 |
-| **Version** | 1.0.2 |
+| **Version** | 1.0.3 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-03 |
+| **Date** | 2026-07-04 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [01-PRD](01-PRD.md) · [03-Database-Design](03-Database-Design.md) · [Naming-Convention](Naming-Convention.md) |
 
@@ -18,6 +18,7 @@
 | 1.0.0 | 2026-07-02 | Initial release. Field-level business meaning and validation rules for every table in `dmf_academic` v2.0.0. | DMF Platform Team |
 | 1.0.1 | 2026-07-02 | QA fix (see [Documentation-QA-Report.md](Documentation-QA-Report.md)): corrected the `assessment_types.code` row's "eleven reserved codes" to "eleven codes total, ten reserved." Frozen as part of the DLAP Documentation Baseline v2.0.0 ([00-Project-Overview.md §13](00-Project-Overview.md#13-documentation-freeze)). | DMF Platform Team |
 | 1.0.2 | 2026-07-03 | Post-Freeze Amendment (T2.6, FR-007/FR-008): `import_logs.event`'s Validation cell extended from 6 to 10 values, adding `duplicate_found`, `import_started`, `retry`, `rollback`. See [decisions/IDR-008](../decisions/IDR-008-import-audit-event-vocabulary-extension.md). | DMF Platform Team |
+| 1.0.3 | 2026-07-04 | Post-Freeze Amendment — documentation alignment with approved [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) (no validation-rule or schema behavior change). `student_question_responses`'s Validation cells clarified to name the Level 2-only producer set instead of implying O-NET. `question_analysis.difficulty_index`/`.discrimination_index`/`.distractor_frequency_json` and `standard_performance_summary.indicator_id` Validation cells extended to state their Assessment Data Level requirement and, for Reserved columns, that an absent value under a Level 1-only import is expected, not a bug. | DMF Platform Team |
 
 ## Purpose and Relationship to 03-Database-Design.md
 
@@ -170,23 +171,34 @@ tables: validation rules that are business logic, not schema constraints.
 | score | The student's raw score on this assessment. | `0.00`–`100.00` inclusive, enforced by a `CHECK` constraint where the MySQL/MariaDB version supports it, and redundantly at the application layer everywhere else (see [Architecture-Decision-Record.md, ADR-003](Architecture-Decision-Record.md#adr-003--why-mysqlmariadb)). |
 
 ### `student_question_responses`
+**Producer, per [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md):** only a **Level 2
+(Raw Assessment Data)** source — OMR, CBT, School Assessment, third-party, or a future AI-based
+assessment system, none built yet — can ever populate this table; a **Level 1** source such as
+O-NET structurally cannot, since no evidenced Level 1 report publishes a per-student item response.
+See [03-Database-Design.md §8](03-Database-Design.md#8-table-definitions--scores--responses).
+
 | Field | Description | Validation |
 |---|---|---|
 | student_id, question_id | Together, identify one student's answer to one specific question. | The pair must be unique. |
-| selected_choice | Which answer choice (`1`–`4`) the student selected. | Optional — `NULL` when the source file only contained subject-level totals, not item-level responses (a valid, expected case, not an error — see [03-Database-Design.md §13](03-Database-Design.md#13-data-integrity-rules)). |
+| selected_choice | Which answer choice (`1`–`4`) the student selected. | Optional — `NULL` when the source file only contained subject-level totals, not item-level responses (a valid, expected case, not an error — see [03-Database-Design.md §13](03-Database-Design.md#13-data-integrity-rules)). In practice, any row in this table at all implies a Level 2 source produced it — a Level 1-only import ([RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md)) never reaches this table. |
 | is_correct | Whether `selected_choice` matches `questions.correct_choice`. | Denormalized (computed at import time, not read live) purely for aggregation speed ([02-System-Architecture.md §8](02-System-Architecture.md#8-analytics--aggregation-architecture)); if `questions.correct_choice` is later corrected, every affected `is_correct` value must be recomputed as part of that correction, not left stale. |
 
 ## 7. Aggregation & Materialized Summaries
 
 All fields in this section are **derived** — nothing here is entered by a person; every value is
-computed by the Analytics module from `student_scores`/`student_question_responses` and rewritten
-on the schedule described in [03-Database-Design.md §14](03-Database-Design.md#14-aggregation-recompute-strategy).
-Treat a "wrong" value here as a recompute bug, never hand-correct a row directly.
+computed by the Analytics module — from `student_scores`/`student_question_responses` for a Level 2
+source, or upserted directly from a Level 1 source's own published figures ([RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md);
+[03-Database-Design.md §14](03-Database-Design.md#14-aggregation-recompute-strategy)) — and
+rewritten on the schedule that section describes. Treat a "wrong" value here as a recompute bug,
+never hand-correct a row directly. An **absent** value in a column labeled **Reserved for Future
+Assessment Sources** below, for an import sourced from a Level 1-only assessment type, is expected
+application behavior, not a recompute bug — a distinct case from a *wrong* value, which remains a bug.
 
 ### `standard_performance_summary`
 | Field | Description | Validation |
 |---|---|---|
 | scope, scope_id | Which aggregation tier this row summarizes — a specific classroom, or a whole grade/school. | `scope` is one of `classroom`, `grade`, `school`; `scope_id` is a `classrooms.id` when `scope = 'classroom'`, or a `schools.id` for the other two tiers — application code must branch on `scope` to know how to interpret `scope_id`, since it is not a single foreign key. |
+| indicator_id | Which learning indicator this row summarizes performance on. | A Level 1 source can only populate this at the finest grain it actually publishes (standard grain for O-NET), not necessarily true indicator grain — an open question explicitly deferred to a future ADR, not answered here; see [03-Database-Design.md §9](03-Database-Design.md#9-table-definitions--aggregation--materialized-summaries). |
 | percent_correct | What fraction of relevant responses were correct, for this indicator/scope/year. | `0.00`–`100.00`; only meaningful together with `student_count` — a `percent_correct` of `100.00` from one student carries different weight than from thirty, which is why `student_count` is stored alongside it rather than discarded after computation. |
 
 ### `student_standard_mastery`
@@ -198,9 +210,9 @@ Treat a "wrong" value here as a recompute bug, never hand-correct a row directly
 ### `question_analysis`
 | Field | Description | Validation |
 |---|---|---|
-| difficulty_index | The CTT p-value — the proportion of students who answered this question correctly. | `0.000`–`1.000`; a value near `0` or `1` indicates an item too hard or too easy to discriminate between students, which is a meaningful analytical signal, not a data-quality problem to "fix." |
-| discrimination_index | The point-biserial correlation between getting this item right and the student's overall score. | Typically `-1.000`–`1.000`; a negative value is a legitimate (if concerning) analytical finding — a well-performing student answering a specific item incorrectly more often than weaker students — and should never be clamped or discarded. |
-| distractor_frequency_json | How often each answer choice was selected. | A JSON object keyed `"1"`–`"4"` with values summing to (approximately) `1.0`; computed only from responses where `selected_choice IS NOT NULL`. |
+| difficulty_index | The CTT p-value — the proportion of students who answered this question correctly. | `0.000`–`1.000`; a value near `0` or `1` indicates an item too hard or too easy to discriminate between students, which is a meaningful analytical signal, not a data-quality problem to "fix." **School scope is Level 1-sufficient** (in v1.0, sourced from O-NET's own published per-item percent-correct); **classroom scope requires a Level 2 source — Reserved for Future Assessment Sources**, absent (not wrong) under a Level 1-only import ([RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md)). |
+| discrimination_index | The point-biserial correlation between getting this item right and the student's overall score. | Typically `-1.000`–`1.000`; a negative value is a legitimate (if concerning) analytical finding — a well-performing student answering a specific item incorrectly more often than weaker students — and should never be clamped or discarded. **Level 2-required, always — Reserved for Future Assessment Sources**; absent (not wrong) under any source active in v1.0. |
+| distractor_frequency_json | How often each answer choice was selected. | A JSON object keyed `"1"`–`"4"` with values summing to (approximately) `1.0`; computed only from responses where `selected_choice IS NOT NULL`. **Level 2-required, always — Reserved for Future Assessment Sources**; absent (not wrong) under any source active in v1.0. |
 
 ## 8. Reporting, Diagnostics & Platform
 

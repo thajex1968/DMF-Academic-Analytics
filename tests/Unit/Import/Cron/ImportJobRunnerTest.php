@@ -235,9 +235,12 @@ final class ImportJobRunnerTest extends TestCase
     {
         $statement = $this->createMock(PDOStatement::class);
 
-        if (str_contains($sql, 'FROM import_jobs') && str_contains($sql, 'ORDER BY created_at ASC, id ASC')
-            && str_contains($sql, 'status = ?') && !str_contains($sql, 'school_id')
-        ) {
+        $isQueuedJobsLookup = str_contains($sql, 'FROM import_jobs')
+            && str_contains($sql, 'ORDER BY created_at ASC, id ASC')
+            && str_contains($sql, 'status = ?')
+            && !str_contains($sql, 'school_id');
+
+        if ($isQueuedJobsLookup) {
             $rows = array_values(array_filter(
                 $this->state['jobs'],
                 static fn (array $job): bool => $job['status'] === 'queued',
