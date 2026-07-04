@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-011 |
-| **Version** | 1.1.0 |
+| **Version** | 1.2.0 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-03 |
+| **Date** | 2026-07-04 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [docs/00-Project-Overview](docs/00-Project-Overview.md) · [docs/01-PRD](docs/01-PRD.md) · [docs/02-System-Architecture](docs/02-System-Architecture.md) · [docs/03-Database-Design](docs/03-Database-Design.md) · [docs/Architecture-Principles](docs/Architecture-Principles.md) · [docs/Naming-Convention](docs/Naming-Convention.md) · [decisions/README](decisions/README.md) |
 
@@ -15,6 +15,7 @@
 
 | Version | Date | Description | Author |
 |---|---|---|---|
+| 1.2.0 | 2026-07-04 | Post-Freeze Amendment — documentation alignment with approved [docs/rfcs/RFC-004](docs/rfcs/RFC-004-multi-source-analytics-architecture.md) (no Sprint task added, removed, or renumbered; no functional scope change). Phase 3's intro now states Source Independence and the Canonical Analytics Model explicitly. T3.2 clarifies that FR-012's item statistics are, in v1.0, scoped to school-scope difficulty index only (Level 1-sufficient); discrimination index and distractor frequency are Level 2-required and out of reach of any source built in v1.0. | DMF Platform Team |
 | 1.1.0 | 2026-07-03 | Post-Freeze Amendment to Phase 2's task list, given directly by instruction. **T2.4** was "Normalization — item-to-indicator mapping (FR-009)"; it is now **"Import Session & Error Reporting"** — session orchestration and user-facing error reporting on top of the Score Import Pipeline (`ImportSessionService`, `ImportSummary`, `RowErrorCollector`, `ImportErrorReport`, `RetryFailedImport`, `DownloadErrorCsv`, `ImportHistory`), matching what was actually built and put up for review under that task ID. The displaced Normalization task moves to **T2.5**, with its scope now stated explicitly (`ItemIndicatorNormalizer`, `StandardMappingService`, `QuestionStandardResolver`, `NormalizationResult`) rather than left as a one-line pointer to [docs/Business-Flow.md §4](docs/Business-Flow.md#4-normalization). The two tasks previously at T2.5 (duplicate detection, FR-007 + import log/audit trail, FR-008) and T2.6 (cron-polled job runner + commit transaction) cascade down to **T2.6** and **T2.7** respectively — unchanged in content, renumbered only. No task's linked FR changed; only task IDs and T2.4/T2.5's descriptions did. | DMF Platform Team |
 | 1.0.1 | 2026-07-03 | Corrected T1.4's `assessment_types` seed description, which said "exactly one active row (ONET) and the ten reserved codes" — contradicting `docs/01-PRD.md` §6/§25 and `docs/03-Database-Design.md` §4, both of which are explicit that only the one `ONET` row is seeded in v1.0; the ten reserved codes are not inserted until each is activated via the Approval Flow. Found and fixed during T1.4 (Seeder) implementation. No scope change — only the stale description. | DMF Platform Team |
 | 1.0.0 | 2026-07-02 | Initial release, added as a Post-Freeze Amendment to the DLAP Documentation Baseline v2.0.0 (see [docs/00-Project-Overview.md §13](docs/00-Project-Overview.md#13-documentation-freeze)). Practical build guide: Roadmap → Task → Implementation Order → Dependencies → Coding Rules → Definition of Done → QA Checklist. | DMF Platform Team |
@@ -118,12 +119,25 @@ ticket should be created at — not finer (a ticket per method) and not coarser 
 
 ### Phase 3 — Standards Mapping & Analytics
 
+Governed, as of [RFC-004](docs/rfcs/RFC-004-multi-source-analytics-architecture.md), by the
+**Source Independence** principle: the Analytics & Aggregation module consumes the **Canonical
+Analytics Model** — the source-agnostic shape the Normalization module (T2.5) already produces —
+never an O-NET-specific structure, even though O-NET remains the only assessment source with an
+Assessment Adapter built in v1.0. See
+[docs/02-System-Architecture.md §8.1](docs/02-System-Architecture.md#81-source-independence--assessment-adapter-layer-and-canonical-analytics-model).
+
 * **T3.1** Import/seed the `สาระ/มาตรฐาน/ตัวชี้วัด` standards catalogue (FR-019) for the current
   curriculum revision.
 * **T3.2** Implement the Analytics & Aggregation module (`DMF\Analytics\*`): classroom/grade/school
   summary recompute (FR-010/FR-011), item statistics (FR-012), year-over-year trend (FR-013) — the
   recompute algorithm in [docs/03-Database-Design.md
-  §14](docs/03-Database-Design.md#14-aggregation-recompute-strategy).
+  §14](docs/03-Database-Design.md#14-aggregation-recompute-strategy), which now documents two
+  source-Level recompute paths (Level 1 direct upsert vs. Level 2 via `student_question_responses`).
+  **Item statistics (FR-012) scope for v1.0:** difficulty index at school scope only — Level
+  1-sufficient, sourced from O-NET's own published per-item statistics; discrimination index and
+  distractor frequency remain **Reserved for Future Assessment Sources** (Level 2-required, no
+  Level 2 source exists yet) — do not build these two against O-NET data, there is nothing for them
+  to compute from.
 * **T3.3** Implement the Dashboard module's chart-rendering layer (PRD §22) — see
   [decisions/IDR-002](decisions/IDR-002-chartjs-for-dashboard.md) for the Chart.js integration
   decision.

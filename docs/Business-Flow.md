@@ -5,9 +5,9 @@
 | | |
 |---|---|
 | **Document ID** | ONET-DOC-010 |
-| **Version** | 2.0.0 |
+| **Version** | 2.0.1 |
 | **Status** | Frozen — DLAP Documentation Baseline v2.0.0 |
-| **Date** | 2026-07-02 |
+| **Date** | 2026-07-04 |
 | **Author** | DMF Platform Team |
 | **Related documents** | [00-Project-Overview](00-Project-Overview.md) · [01-PRD](01-PRD.md) · [02-System-Architecture](02-System-Architecture.md) · [Domain-Model](Domain-Model.md) |
 
@@ -16,6 +16,7 @@
 | Version | Date | Description | Author |
 |---|---|---|---|
 | 1.0.0 | 2026-07-02 | Initial release, as part of the DLAP Documentation Baseline v2.0.0 freeze. Business-level process flow: Import → Validation → Store → Analytics → Dashboard → AI → Recommendation. | DMF Platform Team |
+| 2.0.1 | 2026-07-04 | Post-Freeze Amendment — documentation alignment with approved [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) (no stage, business rule, or v1.0 behavior change). §4 Normalization cross-references the **Canonical Analytics Model** terminology this stage's output is now also named as. §6 Analytics adds one clarifying sentence on the two source-Level recompute paths, cross-referencing the technical detail rather than restating it (SSOT). | DMF Platform Team |
 | 2.0.0 | 2026-07-02 | **Reframed from a system pipeline to a business value chain.** Replaced the 7-stage technical-pipeline model with the 9-stage chain Learning Evidence → Validation → Normalization → Storage → Analytics → Insight → Recommendation → Intervention → Improvement. This makes explicit two stages the old model stopped short of (Intervention, Improvement — the human/educational outcome the system exists to support, not something it executes) and splits Normalization out from Storage as its own step. **No functional or technical change** — every claim in v1.0.0 is preserved, re-homed under the new stage names; FR-006/FR-009's scope is unchanged, only described more precisely (see [§4 Normalization](#4-normalization)). | DMF Platform Team |
 
 ## Purpose and Relationship to Other Documents
@@ -133,6 +134,10 @@ model used to describe it** (see this document's Revision History).
 **Why it matters enough to name separately:** Every downstream stage — Analytics, Insight,
 Recommendation — reasons in terms of `Learning Standard`s, never in terms of raw item numbers.
 Normalization is where that translation happens exactly once, so nothing later has to re-derive it.
+This translated shape is what [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) names
+the **Canonical Analytics Model** — the one internal shape every future assessment source's
+evidence is translated into here, so Analytics never needs to know which source produced it (see
+[02-System-Architecture.md §8.1](02-System-Architecture.md#81-source-independence--assessment-adapter-layer-and-canonical-analytics-model)).
 
 **Who is involved:** No human — fully automated, immediately following a successful Validation.
 
@@ -181,7 +186,12 @@ extended to a second aggregation axis.
 
 **Business rule:** A dashboard must never show a number computed live from raw responses at
 request time — every figure a user sees was pre-computed here, so response time does not depend on
-how much historical evidence exists (PRD NFR, Performance).
+how much historical evidence exists (PRD NFR, Performance). Which recompute path runs — recomputing
+from raw item-level evidence, or upserting a Level 1 source's own already-published figures directly
+— depends on that evidence's Assessment Data Level, not on anything this business-level description
+needs to distinguish; see [RFC-004](rfcs/RFC-004-multi-source-analytics-architecture.md) and
+[03-Database-Design.md §14](03-Database-Design.md#14-aggregation-recompute-strategy) for the
+technical detail.
 
 **Technical reference:** PRD FR-010/FR-011/FR-012/FR-013;
 [02-System-Architecture.md §8](02-System-Architecture.md#8-analytics--aggregation-architecture).
