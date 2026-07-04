@@ -846,7 +846,9 @@ UI sprint. No new business feature, analytics algorithm, Dashboard UI, AI, or da
 ## In Progress
 
 ## Review
-- [ ] Release Hardening — v0.5.0 "Analytics Engine Complete"
+
+## Done
+- [x] Release Hardening — v0.5.0 "Analytics Engine Complete"
       ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), covering all of Sprint 4) — given
       directly by instruction: Architecture Verification, Codebase Audit, Pipeline Audit, API
       Audit, Performance Review, Security Review (static only), Documentation Audit, Versioning,
@@ -944,6 +946,112 @@ UI sprint. No new business feature, analytics algorithm, Dashboard UI, AI, or da
         Dashboard endpoints report on "the latest assessment" only — no query-parameter support in
         `dmf-core`'s `Request` (decisions/IDR-011 §2). The in-memory Dashboard cache does not persist
         across requests (see above).
+
+---
+
+# Sprint 5 — Dashboard Presentation Layer
+
+Bootstrap 5 + Chart.js + vanilla ES6 UI over the frozen, unmodified Dashboard Data API (Sprint 4
+Phase 3). UI only — Analytics Engine, Dashboard API, Repositories, Import, and Database are all
+read-only/untouched this sprint, per explicit instruction.
+
+## Todo
+
+## In Progress
+
+## Review
+- [ ] Dashboard Presentation Layer — Sprint 5
+      ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), Phase 3/T3.3) — given directly by
+      instruction, all 9 phases in one pass: Layout, Cards, Charts, Interactive Dashboard,
+      Components, Accessibility, Performance, Security, Testing. No PHP file touched — Analytics
+      Engine, Dashboard API, Repositories, Calculators, Aggregators, Import, and Database are all
+      unmodified, verified by re-running the full PHP quality gate (below) and finding it identical
+      to before this sprint.
+      - **New** (`public_html/dashboard/`, all new, no existing file modified): `dashboard.html`,
+        `assets/css/dashboard.css`, `assets/js/api.js`, `assets/js/dashboard.js`, and 7 reusable
+        ES-module components under `assets/js/components/`: `DashboardCard`, `DashboardChart`,
+        `DashboardTable`, `DashboardAlert`, `DashboardLoader`, `DashboardEmptyState`,
+        `DashboardErrorState`. Vanilla ES6 modules (`<script type="module">`), no bundler, no
+        framework — matching this project's established no-build-step precedent
+        ([decisions/IDR-010](decisions/IDR-010-web-application-foundation.md)). Deliberately
+        self-contained rather than reusing `public_html/assets/js/app.js` (Sprint 3, frozen) — that
+        file's `API_URL` is a same-directory-relative path that resolves incorrectly one directory
+        deeper; not modifying frozen Sprint 3 code to accommodate a new page was the safer call
+        (decisions/IDR-012).
+      - **Real architecture conflict found and resolved, per
+        [decisions/IDR-012](decisions/IDR-012-dashboard-ui-chartjs-cdn-deviation.md)**:
+        [decisions/IDR-002](decisions/IDR-002-chartjs-for-dashboard.md) already mandates Chart.js be
+        **vendored**, not CDN-loaded — this implementation environment has no package manager and no
+        way to fetch and verify a real third-party bundle, so fabricating a local file pretending to
+        be Chart.js would be worse than an explicit, documented deviation. Chart.js (and Bootstrap,
+        matching the existing SPA shell) are both CDN-loaded this Sprint; vendoring per IDR-002
+        remains an explicit, tracked follow-up before production deployment.
+      - **Real data gaps found against the frozen Dashboard API, not fixed (API is frozen this
+        Sprint) — see IDR-012**: no `difficulty` figure is exposed anywhere in `DashboardResponse`
+        (Phase 3 never aggregated `DifficultyCalculator`'s output), so the "Difficulty" card and
+        "Difficulty Distribution" chart both render an honest empty state, not a fabricated number.
+        `DashboardSubject.highest`/`.lowest`/`.average` are `null` today by Phase 2's own design (no
+        per-student score series yet) — those cards render `—`, not an invented value.
+        `benchmarks` is `[]` today (no Level 1 Assessment Adapter exists yet, RFC-004) — the
+        Benchmark Summary card and Benchmark Comparison chart are both an honest empty state.
+      - **Assessment selector is an indicator, not a functioning switcher**: `dmf-core`'s `Request`
+        still cannot accept a caller-supplied assessment id (decisions/IDR-011 §2, unchanged), so
+        the Dashboard Data API only ever answers for the latest assessment. The selector shows the
+        one real assessment and is disabled, with a visible note explaining why — not a dropdown
+        that looks functional but silently does nothing.
+      - **Cards** (8, per instruction): Assessment, Students, Average Score (labeled to show it
+        reflects percent-correct, the only aggregate the API actually provides), Highest Score,
+        Lowest Score, Difficulty, Health Status (from `dashboard_health`), Benchmark Summary — the
+        last three render honest empty/unavailable states today, per the gaps above.
+      - **Charts** (5, per instruction, covering all 4 requested Chart.js types): Subject
+        Comparison (Bar), Standard Performance (Line), Strand Performance (Radar), Difficulty
+        Distribution (Pie — always empty today), Benchmark Comparison (grouped Bar — always empty
+        today). Each chart has an accessible equivalent: two data tables (Subjects, Standards) below
+        the charts, screen-reader-reachable, built from the same API response — a canvas chart has
+        no text alternative on its own (Phase 6).
+      - **Interactive**: refresh button (guarded against overlapping fetches via an `isLoading`
+        flag — Phase 7), dark/light toggle using Bootstrap 5.3's native `data-bs-theme` (persisted
+        in `localStorage`, never the auth token's `sessionStorage`), loading/empty/error states with
+        a working retry button, responsive chart resize (`responsive: true, maintainAspectRatio:
+        false`, Chart.js's own mechanism, no custom resize code).
+      - **Performance (Phase 7)**: exactly two API calls per load/refresh
+        (`dashboard_overview` + `dashboard_health`, in parallel via `Promise.all` —
+        `dashboard_overview` alone already carries assessments/subjects/standards/strands/
+        benchmarks/warnings, so no per-section endpoint call is needed), never duplicated. Chart
+        instances are reused and `.update()`d, never destroyed/recreated on refresh, per
+        `DashboardChart`'s own design.
+      - **Security (Phase 8)**: verified directly, not assumed — grepped every new file for
+        `onclick=`/`style=`/`eval(`/`innerHTML`: zero inline event handlers, zero inline styles
+        (one was found during self-review — the assessment `<select>`'s `style="min-width:…"` —
+        moved to a CSS class before this was reported), zero `eval()`, and the only `innerHTML`
+        occurrences are a docblock comment and the well-established `textContent`-then-read-`innerHTML`
+        escaping idiom already used by `app.js` (Sprint 3) — never an assignment of untrusted content.
+      - **Accessibility (Phase 6)**: skip link, landmark roles (`nav`/`main`/`footer`), `aria-live`
+        regions for loading/error/empty/alerts, `aria-label` + `role="img"` on every chart canvas,
+        every interactive control is a native `<button>`/`<select>` (no custom click-only `<div>`),
+        relies on Bootstrap 5's own WCAG 2.1 AA-audited default theme for contrast
+        ([01-PRD.md §20](docs/01-PRD.md#20-non-functional-requirements)) in both light and dark mode.
+      - **Verified for real, not just claimed**: `node --check` on all 8 new JS files — clean, no
+        syntax error. Started a real temporary PHP built-in server against `public_html/` and
+        confirmed with real HTTP requests: `dashboard.html`/`dashboard.css`/`dashboard.js` all serve
+        with correct status/content-type; all 5 new Dashboard Data API routes correctly return
+        `401 {"error":"Bearer token required."}` with no token, a garbage-token request correctly
+        returns `401` with no fatal error, an unrelated unknown action still correctly 404s (no
+        regression); the PHP server's own error log had zero warnings/notices/fatals across every
+        request. Full PHP quality gate re-run — `vendor/bin/phpunit` **397/397 tests, 1265
+        assertions** (identical to before this sprint, confirming no PHP regression),
+        `vendor/bin/phpstan analyse` `[OK] No errors` at level 8 (no `.neon` path covers
+        `public_html/`, so this only re-confirms `app/`/`tests/` are untouched), `vendor/bin/phpcs`
+        — same pre-existing, already-documented CRLF/`core.autocrlf` finding as before (unrelated to
+        this sprint, zero PHP files changed).
+      - **Known limitations, stated plainly rather than glossed over**: no real logged-in browser
+        session was driven end-to-end in this pass — this environment has no browser-automation
+        tool and no currently-running database service, and standing both up was judged
+        disproportionate to verify a UI-only sprint when route-level and syntax-level verification
+        already gave real signal; a human should still click through Desktop/Tablet/Mobile before
+        calling this production-ready. Chart.js is CDN-loaded, not vendored (IDR-002 deviation,
+        tracked). Difficulty/Highest/Lowest/Average-Score/Benchmark data is genuinely unavailable
+        from the current API, not a bug in this sprint's UI.
 
 ## Done
 
