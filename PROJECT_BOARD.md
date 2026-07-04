@@ -960,7 +960,9 @@ read-only/untouched this sprint, per explicit instruction.
 ## In Progress
 
 ## Review
-- [ ] Dashboard Presentation Layer — Sprint 5
+
+## Done
+- [x] Dashboard Presentation Layer — Sprint 5
       ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), Phase 3/T3.3) — given directly by
       instruction, all 9 phases in one pass: Layout, Cards, Charts, Interactive Dashboard,
       Components, Accessibility, Performance, Security, Testing. No PHP file touched — Analytics
@@ -1052,6 +1054,80 @@ read-only/untouched this sprint, per explicit instruction.
         calling this production-ready. Chart.js is CDN-loaded, not vendored (IDR-002 deviation,
         tracked). Difficulty/Highest/Lowest/Average-Score/Benchmark data is genuinely unavailable
         from the current API, not a bug in this sprint's UI.
+
+---
+
+# Sprint 6 — AI Layer
+
+## Phase 1 — AI Foundation
+
+Establishes the abstraction future AI providers plug into. No real provider integration, no
+external API calls, no Dashboard change, no Analytics Engine change — `MockProvider` (deterministic,
+no network, PHPUnit-only) is the only `AIProviderInterface` implementation this phase ships.
+
+## Todo
+
+## In Progress
+
+## Review
+- [ ] AI Foundation — Sprint 6 Phase 1
+      ([IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md#2-task), governs future FR-015 work;
+      decisions/IDR-013) — given directly by instruction. The AI Foundation Layer depends only on
+      Analytics DTOs (`DMF\Analytics\Dashboard\*`) — verified directly, not assumed: grepped every
+      new file under `app/AI/` for `Repository`/`PDO`/`Connection`/SQL keywords, found none.
+      - **New** (`app/AI/`, all new): `Contracts/` (`AIProviderInterface`, `PromptBuilderInterface`,
+        `InsightGeneratorInterface`, `RecommendationGeneratorInterface`), `Providers/MockProvider`,
+        `Prompt/` (`Prompt`, `PromptType` enum, `DashboardPromptBuilder`),
+        `Insight/InsightEngine`, `Recommendation/RecommendationEngine`, `DTO/` (`AIContext`,
+        `AIInsight`, `AIRecommendation`, `AIRecommendationPriority` enum, `AIResponse`),
+        `Exceptions/` (`AIException`, `PromptTooLargeException`, `UnsupportedProviderException`).
+        `config/ai.php` (new) — `default_provider`/`timeout`/`temperature`/`max_tokens`/`retry`/
+        `prompt_version`, every value from `.env`, no hardcoded secret. `bootstrap/app.php`
+        (modified, one line: registers `'ai' => require .../config/ai.php`, matching how
+        `app`/`database`/`auth` are already registered — no other change).
+      - **Real design decisions, documented per
+        [decisions/IDR-013](decisions/IDR-013-ai-foundation-layer-design.md)** rather than assumed
+        silently: `Prompt` lives under `app/AI/Prompt/`, not `app/AI/DTO/` (the instruction named it
+        as PromptBuilder's output but never listed a file for it); `AIProviderInterface::generate()`
+        returns a generic `AIResponse` and the *engines* parse it into `AIInsight`/
+        `AIRecommendation` (keeps the provider boundary a true transport abstraction);
+        `PromptBuilderInterface`/`InsightGeneratorInterface`/`RecommendationGeneratorInterface` are
+        typed directly against the three Dashboard DTOs rather than a generic analytics bag (YAGNI —
+        exactly one concrete builder exists); a `PromptType` enum threads through `Prompt` so one
+        builder/provider serves both Insight and Recommendation without near-duplicate classes;
+        `max_tokens` is approximated as a caller-supplied character budget (no tokenizer dependency
+        exists or was requested).
+      - **Safety rule enforced in PHP, not only in the prompt text**: both engines check
+        `$assessment->percentCorrect === null` — the same "is there any computable data" signal
+        Sprint 4/5 already use — **before** building a prompt or calling the provider at all,
+        returning a canned `"Insufficient data."` result immediately. The prompt's own Safety Rules
+        section also instructs the provider never to fabricate, but the PHP-level guard does not
+        depend on a real provider actually following that instruction.
+      - **Recommendations only, verified by absence**: `RecommendationEngine` contains no average,
+        percentage, or threshold computation anywhere in its own code — grepped directly to confirm
+        — every field on the returned `AIRecommendation` is parsed from the provider's own response,
+        never derived from Analytics figures by this class.
+      - **Verified for real**: `composer dump-autoload` — 2454 classes (same two pre-existing PSR-4
+        casing notes, unrelated). `vendor/bin/phpunit` — **440/440 tests, 1391 assertions**, all
+        passing (43 new: DTO immutability, `Prompt`/`PromptType`/`DashboardPromptBuilder` section
+        generation, `MockProvider` determinism and contract compliance, both engines' full
+        orchestration — insufficient-data short-circuit, unsupported-capability rejection,
+        prompt-too-large rejection, happy-path parsing, malformed/incomplete/invalid-enum response
+        rejection — and `config/ai.php`'s env-driven loading and type casting).
+        `vendor/bin/phpstan analyse` — `[OK] No errors` at level 8. `vendor/bin/phpcs
+        --standard=.phpcs.xml` (the exact scope `.phpcs.xml`/`composer lint` define — `app` and
+        `tests` only) — **0 errors, 0 warnings among every file this phase touched** (two real
+        findings — a multi-line-condition PSR-12 violation and several over-120-character test
+        lines — found during this phase's own verification and fixed before reporting); the same
+        pre-existing, already-documented CRLF finding remains, unrelated. `config/ai.php`/
+        `bootstrap/app.php` are outside `.phpcs.xml`'s scanned paths (`config/`/`bootstrap/` are not
+        in `<file>` — same as the three pre-existing `config/*.php` files), so `config/ai.php`
+        matches their established (unscanned) file-header style rather than introducing a new one.
+      - **Known limitations**: no real `AIProviderInterface` implementation exists — Sprint 6 Phase
+        2 is where a real HTTP-backed provider is added behind the same interface, unchanged.
+        `max_tokens`→character-budget conversion is a rough heuristic pending a real tokenizer.
+        Partial-data judgment (a figure present but based on a very small sample) is left entirely
+        to the prompt/provider — only the "no data at all" case has a PHP-level guard.
 
 ## Done
 

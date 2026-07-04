@@ -31,6 +31,7 @@ $config = Config::fromArray([
     'app'      => require $root . '/config/app.php',
     'database' => require $root . '/config/database.php',
     'auth'     => require $root . '/config/auth.php',
+    'ai'       => require $root . '/config/ai.php',
     'dlap'     => Config::fromEnvironment('DLAP_')->all(),
 ]);
 
