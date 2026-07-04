@@ -13,4 +13,10 @@
 !/storage/logs/.gitkeep
 /storage/cache/*
 !/storage/cache/.gitkeep
+
+# Raw primary-source O-NET evidence (PDF/XLSX/CSV score reports for this
+# school, referenced directly by RFC-004's Evidence section) — kept as a
+# local reference dataset only, never committed: real institutional data,
+# not project source. Sanitized, synthetic example fixtures for tests live
+# under tests/fixtures/onet/ instead — see that directory's README.md.
 Onet/
